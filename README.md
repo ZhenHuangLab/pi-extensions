@@ -1,6 +1,6 @@
 <h1 align="center"><code>pi-xai-search</code></h1>
 
-<p align="center"><strong>Live X search for Pi — powered by xAI, independent of your active chat model.</strong></p>
+<p align="center"><strong>Live X search for Pi</strong></p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm version" src="https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search?color=cb3837&amp;logo=npm"></a>
@@ -309,4 +309,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security r
 
 ## License
 
-[MIT](LICENSE) © 2026 ZhenHuangLab contributors
+[MIT](LICENSE)
+
+© 2026 ZhenHuangLab
