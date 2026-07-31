@@ -3,28 +3,23 @@
   "version": "0.1.0",
   "description": "Model-independent live X search for Pi, powered by xAI's native x_search tool",
   "keywords": [
-    "pi-package",
-    "pi-extension",
-    "xai",
     "grok",
-    "x-search",
+    "pi-extension",
+    "pi-package",
+    "search",
     "twitter",
-    "search"
+    "x-search",
+    "xai"
   ],
-  "license": "MIT",
-  "author": "ZhenHuangLab",
   "homepage": "https://github.com/ZhenHuangLab/pi-xai-search#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ZhenHuangLab/pi-xai-search.git"
-  },
   "bugs": {
     "url": "https://github.com/ZhenHuangLab/pi-xai-search/issues"
   },
-  "type": "module",
-  "main": "./index.ts",
-  "exports": {
-    ".": "./index.ts"
+  "license": "MIT",
+  "author": "ZhenHuangLab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/pi-xai-search.git"
   },
   "files": [
     "index.ts",
@@ -32,6 +27,14 @@
     "README.md",
     "LICENSE"
   ],
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "format": "oxfmt --write .",
@@ -42,10 +45,6 @@
     "typecheck": "tsc --noEmit",
     "prepack": "npm run check"
   },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.83.0",
-    "typebox": "*"
-  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.83.0",
     "@types/node": "^24.0.0",
@@ -55,11 +54,12 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.10"
   },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.83.0",
+    "typebox": "*"
+  },
   "engines": {
     "node": ">=20"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "pi": {
     "extensions": [
