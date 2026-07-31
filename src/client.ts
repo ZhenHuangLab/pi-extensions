@@ -53,6 +53,21 @@ function compactErrorBody(body: string): string {
   return body.replace(/\s+/g, " ").trim().slice(0, 1_000);
 }
 
+function buildXSearchTool(request: NormalizedXaiSearchRequest): Record<string, unknown> {
+  const tool: Record<string, unknown> = { type: "x_search" };
+  if (request.fromDate) tool.from_date = request.fromDate;
+  if (request.toDate) tool.to_date = request.toDate;
+  if (request.allowedXHandles) tool.allowed_x_handles = request.allowedXHandles;
+  if (request.excludedXHandles) tool.excluded_x_handles = request.excludedXHandles;
+  if (request.enableImageUnderstanding !== undefined) {
+    tool.enable_image_understanding = request.enableImageUnderstanding;
+  }
+  if (request.enableVideoUnderstanding !== undefined) {
+    tool.enable_video_understanding = request.enableVideoUnderstanding;
+  }
+  return tool;
+}
+
 export async function callXaiSearch(
   runtime: ResolvedXaiRuntime,
   request: NormalizedXaiSearchRequest,
@@ -63,14 +78,10 @@ export async function callXaiSearch(
     throw new Error("timeoutMs must be a positive number");
   }
 
-  const xSearchTool: Record<string, unknown> = { type: "x_search" };
-  if (request.fromDate) xSearchTool.from_date = request.fromDate;
-  if (request.toDate) xSearchTool.to_date = request.toDate;
-
   const body = {
     model: request.model,
     input: [{ role: "user", content: request.query }],
-    tools: [xSearchTool],
+    tools: [buildXSearchTool(request)],
     store: false,
   };
 

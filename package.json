@@ -1,6 +1,6 @@
 {
   "name": "@zhenhuang/pi-xai-search",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Model-independent live X search for Pi, powered by xAI's native x_search tool",
   "keywords": [
     "grok",
@@ -48,6 +48,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.83.0",
+    "@earendil-works/pi-tui": "^0.83.0",
     "@types/node": "^24.0.0",
     "oxfmt": "^0.55.0",
     "oxlint": "^1.74.0",
@@ -57,6 +58,7 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.83.0",
+    "@earendil-works/pi-tui": ">=0.83.0",
     "typebox": "*"
   },
   "engines": {

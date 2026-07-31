@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-31
+
+### Added
+
+- `allowed_x_handles` and `excluded_x_handles` filters with xAI's 20-handle limit and mutual-exclusion validation.
+- Optional `enable_image_understanding` and `enable_video_understanding` controls.
+- Floating `/xai-search config` model picker with OAuth-backed live model discovery and fuzzy search.
+- Persistent `~/.pi/agent/pi-xai-search.json` model configuration that applies immediately without `/reload`.
+
 ## [0.1.0] - 2026-07-31
 
 ### Added
@@ -18,5 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Cancellation, timeout, validation, and safe error handling.
 - Unit tests and multi-version Node.js CI.
 
-[Unreleased]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ZhenHuangLab/pi-xai-search/releases/tag/v0.1.0

@@ -15,6 +15,9 @@ const request: NormalizedXaiSearchRequest = {
   model: "grok-4.5",
   fromDate: "2026-07-01",
   toDate: "2026-07-31",
+  allowedXHandles: ["xai", "grok"],
+  enableImageUnderstanding: true,
+  enableVideoUnderstanding: false,
 };
 
 function abortAwareFetch(): FetchLike {
@@ -29,7 +32,7 @@ function abortAwareFetch(): FetchLike {
 }
 
 describe("callXaiSearch", () => {
-  it("sends a Responses API request with x_search and date filters", async () => {
+  it("sends a Responses API request with all x_search filters", async () => {
     const fetch = vi.fn<FetchLike>().mockResolvedValue(
       new Response(JSON.stringify({ model: "grok-4.5", output: [] }), {
         status: 200,
@@ -57,6 +60,9 @@ describe("callXaiSearch", () => {
           type: "x_search",
           from_date: "2026-07-01",
           to_date: "2026-07-31",
+          allowed_x_handles: ["xai", "grok"],
+          enable_image_understanding: true,
+          enable_video_understanding: false,
         },
       ],
       store: false,

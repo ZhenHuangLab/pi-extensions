@@ -13,6 +13,7 @@
 <p align="center">
   <a href="#installation">Installation</a> ·
   <a href="#authentication">Authentication</a> ·
+  <a href="#configuration">Configuration</a> ·
   <a href="#usage">Usage</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#faq">FAQ</a>
@@ -22,7 +23,7 @@
 
 `pi-xai-search` adds one focused tool to [Pi](https://github.com/earendil-works/pi-mono): **`xai_search`**. It asks an xAI model to search live X (formerly Twitter) through xAI's native server-side `x_search` capability and returns a readable answer with citations.
 
-Your main Pi session can keep using Claude, GPT, Gemini, or any other model. The search itself runs separately with **Grok 4.5 by default**.
+Your main Pi session can keep using Claude, GPT, Gemini, or any other model. The search itself runs separately with **Grok 4.5 by default**, and its model can be changed without restarting Pi.
 
 ## Why choose `pi-xai-search`?
 
@@ -37,8 +38,12 @@ Your main Pi session can keep using Claude, GPT, Gemini, or any other model. The
 
 - Live X keyword and semantic search through xAI
 - Default nested model: `grok-4.5`
+- Floating `/xai-search config` model picker with fuzzy search and immediate hot reload
+- Live model discovery from xAI's `/models` endpoint using Pi-resolved credentials
 - Per-call xAI model override
 - Inclusive UTC date filtering with `from_date` and `to_date`
+- Allow or exclude up to 20 X handles per search
+- Optional image and X-video understanding
 - Pi-managed OAuth and API-key resolution
 - Automatic OAuth refresh through Pi's credential store
 - Cancellation and five-minute request timeout
@@ -93,6 +98,34 @@ export XAI_API_KEY="your-xai-api-key"
 > [!IMPORTANT]
 > `pi-xai-search` never opens `~/.pi/agent/auth.json` itself and never logs, copies, or returns your token. Authentication is resolved through Pi's public `modelRegistry` API.
 
+The same resolved OAuth token or API key is used to fetch the model catalogue when the configuration menu opens.
+
+## Configuration
+
+Run this command in Pi's interactive TUI:
+
+```text
+/xai-search config
+```
+
+It opens a centered floating model picker. Type to fuzzy-search models, use Up/Down to navigate, press Enter to select, or Escape to cancel. The catalogue is fetched live from xAI's `GET /v1/models` endpoint using your `/login xai` OAuth session (or `XAI_API_KEY`).
+
+A selection is applied to the next `xai_search` call immediately—no `/reload` or restart is needed—and is persisted to:
+
+```text
+~/.pi/agent/pi-xai-search.json
+```
+
+The initial configuration is:
+
+```json
+{
+  "model": "grok-4.5"
+}
+```
+
+A per-call `model` argument still takes precedence without changing the persisted default.
+
 ## Usage
 
 Ask naturally. The active model will call `xai_search` when live X data is useful:
@@ -109,14 +142,20 @@ Search X for reactions to Pi from the last week and summarize the main themes.
 Find recent primary-source posts about Grok 4.5 and include links.
 ```
 
-The exposed tool schema is intentionally small:
+The exposed tool schema supports both simple searches and xAI's advanced X-search controls:
 
-| Parameter   |         Type | Required | Description                                             |
-| ----------- | -----------: | :------: | ------------------------------------------------------- |
-| `query`     |       string |   Yes    | The question or topic to search on X                    |
-| `model`     |       string |    No    | xAI model used for this request; defaults to `grok-4.5` |
-| `from_date` | `YYYY-MM-DD` |    No    | Include posts on or after this UTC date                 |
-| `to_date`   | `YYYY-MM-DD` |    No    | Include posts on or before this UTC date                |
+| Parameter                    |              Type | Required | Description                                                    |
+| ---------------------------- | ----------------: | :------: | -------------------------------------------------------------- |
+| `query`                      |            string |   Yes    | The question or topic to search on X                           |
+| `model`                      |            string |    No    | Per-call xAI model override; otherwise uses the configured one |
+| `from_date`                  |      `YYYY-MM-DD` |    No    | Include posts on or after this UTC date                        |
+| `to_date`                    |      `YYYY-MM-DD` |    No    | Include posts on or before this UTC date                       |
+| `allowed_x_handles`          | `string[]` (≤ 20) |    No    | Only consider posts from these handles                         |
+| `excluded_x_handles`         | `string[]` (≤ 20) |    No    | Exclude posts from these handles                               |
+| `enable_image_understanding` |           boolean |    No    | Let xAI analyze images encountered in X posts                  |
+| `enable_video_understanding` |           boolean |    No    | Let xAI analyze videos encountered in X posts                  |
+
+`allowed_x_handles` and `excluded_x_handles` are mutually exclusive. Handles may be written with or without a leading `@`. Media understanding can incur additional xAI token usage.
 
 Example tool input:
 
@@ -128,7 +167,18 @@ Example tool input:
 }
 ```
 
-Override the nested search model when needed:
+Restrict a search and enable media understanding when needed:
+
+```json
+{
+  "query": "Summarize recent product demos from the xAI team",
+  "allowed_x_handles": ["xai", "@grok"],
+  "enable_image_understanding": true,
+  "enable_video_understanding": true
+}
+```
+
+Override the configured nested model for one call:
 
 ```json
 {
@@ -149,7 +199,7 @@ Your active Pi model (Claude / GPT / Gemini / Grok / ...)
                          │ resolved OAuth or XAI_API_KEY
                          ▼
              POST https://api.x.ai/v1/responses
-               model: grok-4.5 (default)
+               model: configured model (grok-4.5 initially)
                tools: [{ type: "x_search" }]
                store: false
                          │
@@ -157,7 +207,7 @@ Your active Pi model (Claude / GPT / Gemini / Grok / ...)
           Answer + live X citations returned to Pi
 ```
 
-The extension never reads `ctx.model` to select the search model. Changing `/model` in the main session therefore does not alter the nested xAI request.
+The extension never reads `ctx.model` to select the search model. Changing `/model` in the main session therefore does not alter the nested xAI request. `/xai-search config` separately fetches `GET /v1/models`, saves the chosen ID, and updates the in-memory default immediately.
 
 ## Comparison
 
@@ -196,7 +246,7 @@ Re-authenticate with `/login xai`. A 403 can also mean that the account is not e
 
 ### Model not found or unsupported
 
-Omit `model` to return to the tested default, `grok-4.5`. Model availability is controlled by xAI and may vary by account.
+Run `/xai-search config` and choose a model available to the current xAI credential. Model availability and `x_search` entitlement are controlled by xAI and may vary by account. Delete `~/.pi/agent/pi-xai-search.json` to return to `grok-4.5`.
 
 ### The tool does not appear
 
@@ -232,7 +282,7 @@ That ties search availability and model choice to the active provider. `xai_sear
 <details>
 <summary><strong>Can I restrict search to specific X accounts?</strong></summary>
 
-Not in v0.1. The first release intentionally keeps a minimal schema. Filters such as `allowed_x_handles`, `excluded_x_handles`, and media understanding can be added in a future release.
+Yes. Pass up to 20 handles in either `allowed_x_handles` or `excluded_x_handles`. The two filters cannot be combined in one request.
 
 </details>
 
