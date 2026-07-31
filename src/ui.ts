@@ -75,11 +75,129 @@ export function filterXaiModelChoices(choices: XaiModelChoice[], query: string):
   return fuzzyFilter(choices, query.trim(), (choice: XaiModelChoice) => choice.searchText);
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+interface XaiSettingsMenuOptions {
+  currentModel: string;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  onSelectModel(): void;
+  onCancel(): void;
+  requestRender(): void;
+}
+
+class XaiSettingsMenu implements Component, Focusable {
+  private readonly container = new Container();
+  private list!: SelectList;
+  private focusedValue = false;
+
+  constructor(private readonly options: XaiSettingsMenuOptions) {
+    this.rebuild();
+  }
+
+  get focused(): boolean {
+    return this.focusedValue;
+  }
+
+  set focused(value: boolean) {
+    this.focusedValue = value;
+  }
+
+  private rebuild(): void {
+    const items: SelectItem[] = [
+      {
+        value: "model",
+        label: "Search model",
+        description: `Current: ${this.options.currentModel}`,
+      },
+    ];
+
+    this.list = new SelectList(items, items.length, {
+      selectedPrefix: (text: string) => this.options.theme.fg("accent", text),
+      selectedText: (text: string) => this.options.theme.fg("accent", text),
+      description: (text: string) => this.options.theme.fg("muted", text),
+      scrollInfo: (text: string) => this.options.theme.fg("dim", text),
+      noMatch: (text: string) => this.options.theme.fg("warning", text),
+    });
+    this.list.onSelect = () => this.options.onSelectModel();
+    this.list.onCancel = this.options.onCancel;
+
+    this.container.clear();
+    this.container.addChild(
+      new DynamicBorder((text: string) => this.options.theme.fg("borderAccent", text)),
+    );
+    this.container.addChild(
+      new Text(
+        this.options.theme.fg("accent", this.options.theme.bold("xAI Search Settings")),
+        1,
+        0,
+      ),
+    );
+    this.container.addChild(
+      new Text(this.options.theme.fg("dim", "↑↓ navigate • enter select • esc cancel"), 1, 0),
+    );
+    this.container.addChild(this.list);
+    this.container.addChild(
+      new DynamicBorder((text: string) => this.options.theme.fg("borderAccent", text)),
+    );
+  }
+
+  handleInput(data: string): void {
+    this.list.handleInput(data);
+    this.options.requestRender();
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+
+  invalidate(): void {
+    this.container.invalidate();
+    this.rebuild();
+  }
+}
+
+class XaiSettingsMessage implements Component, Focusable {
+  private readonly container = new Container();
+  private focusedValue = false;
+
+  constructor(theme: Theme, title: string, body: string, hint: string) {
+    this.container.addChild(new DynamicBorder((text: string) => theme.fg("borderAccent", text)));
+    this.container.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+    this.container.addChild(new Text(theme.fg("muted", body), 1, 0));
+    this.container.addChild(new Text(theme.fg("dim", hint), 1, 0));
+    this.container.addChild(new DynamicBorder((text: string) => theme.fg("borderAccent", text)));
+  }
+
+  get focused(): boolean {
+    return this.focusedValue;
+  }
+
+  set focused(value: boolean) {
+    this.focusedValue = value;
+  }
+
+  handleInput(_data: string): void {
+    // Esc is handled by XaiSettingsFlow, which owns the view switching.
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+
+  invalidate(): void {
+    this.container.invalidate();
+  }
+}
+
 interface XaiModelPickerOptions {
   choices: XaiModelChoice[];
   currentModel: string;
   theme: Theme;
   keybindings: KeybindingsManager;
+  cancelHint?: string;
   onSelect(model: string): void;
   onCancel(): void;
   requestRender(): void;
@@ -137,7 +255,14 @@ class XaiModelPicker implements Component, Focusable {
     this.container.addChild(this.input);
     this.container.addChild(this.list);
     this.container.addChild(
-      new Text(this.options.theme.fg("dim", "↑↓ navigate • enter select • esc cancel"), 1, 0),
+      new Text(
+        this.options.theme.fg(
+          "dim",
+          `↑↓ navigate • enter select • ${this.options.cancelHint ?? "esc cancel"}`,
+        ),
+        1,
+        0,
+      ),
     );
     this.container.addChild(
       new DynamicBorder((text: string) => this.options.theme.fg("borderAccent", text)),
@@ -170,20 +295,139 @@ class XaiModelPicker implements Component, Focusable {
   }
 }
 
-export function selectXaiModel(
+type XaiSettingsView = "menu" | "loading" | "error" | "model";
+
+interface XaiSettingsFlowOptions {
+  currentModel: string;
+  theme: Theme;
+  keybindings: KeybindingsManager;
+  loadModels(): Promise<XaiModelInfo[]>;
+  onSelectModel(model: string): void;
+  onCancel(): void;
+  requestRender(): void;
+}
+
+class XaiSettingsFlow implements Component, Focusable {
+  private viewName: XaiSettingsView = "menu";
+  private readonly menu: XaiSettingsMenu;
+  private readonly loadingView: XaiSettingsMessage;
+  private errorView: XaiSettingsMessage | null = null;
+  private picker: XaiModelPicker | null = null;
+  private focusedValue = false;
+
+  constructor(private readonly options: XaiSettingsFlowOptions) {
+    this.menu = new XaiSettingsMenu({
+      currentModel: options.currentModel,
+      theme: options.theme,
+      keybindings: options.keybindings,
+      onSelectModel: () => void this.startModelLoading(),
+      onCancel: options.onCancel,
+      requestRender: options.requestRender,
+    });
+    this.loadingView = new XaiSettingsMessage(
+      options.theme,
+      "xAI Search Settings",
+      "Loading xAI models…",
+      "esc to go back",
+    );
+  }
+
+  get focused(): boolean {
+    return this.focusedValue;
+  }
+
+  set focused(value: boolean) {
+    this.focusedValue = value;
+    this.activeView.focused = value;
+  }
+
+  private get activeView(): Component & Focusable & { handleInput(data: string): void } {
+    switch (this.viewName) {
+      case "menu":
+        return this.menu;
+      case "loading":
+        return this.loadingView;
+      case "error":
+        return this.errorView!;
+      case "model":
+        return this.picker!;
+    }
+  }
+
+  private switchTo(view: XaiSettingsView): void {
+    this.activeView.focused = false;
+    this.viewName = view;
+    this.activeView.focused = this.focusedValue;
+    this.options.requestRender();
+  }
+
+  private async startModelLoading(): Promise<void> {
+    this.switchTo("loading");
+    let models: XaiModelInfo[];
+    try {
+      models = await this.options.loadModels();
+    } catch (error) {
+      if (this.viewName !== "loading") return;
+      this.errorView = new XaiSettingsMessage(
+        this.options.theme,
+        "Could not load xAI models",
+        errorMessage(error),
+        "esc to go back",
+      );
+      this.switchTo("error");
+      return;
+    }
+    if (this.viewName !== "loading") return;
+
+    this.picker = new XaiModelPicker({
+      choices: createXaiModelChoices(models, this.options.currentModel),
+      currentModel: this.options.currentModel,
+      theme: this.options.theme,
+      keybindings: this.options.keybindings,
+      cancelHint: "esc back",
+      onSelect: (model: string) => this.options.onSelectModel(model),
+      onCancel: () => this.switchTo("menu"),
+      requestRender: this.options.requestRender,
+    });
+    this.switchTo("model");
+  }
+
+  handleInput(data: string): void {
+    if (this.viewName === "loading" || this.viewName === "error") {
+      if (this.options.keybindings.matches(data, "tui.select.cancel")) {
+        this.switchTo("menu");
+      }
+    } else {
+      this.activeView.handleInput(data);
+    }
+    this.options.requestRender();
+  }
+
+  render(width: number): string[] {
+    return this.activeView.render(width);
+  }
+
+  invalidate(): void {
+    this.menu.invalidate();
+    this.loadingView.invalidate();
+    this.errorView?.invalidate();
+    this.picker?.invalidate();
+  }
+}
+
+export function selectXaiSettingsMenu(
   ctx: Pick<ExtensionContext, "ui">,
-  models: XaiModelInfo[],
   currentModel: string,
+  loadModels: () => Promise<XaiModelInfo[]>,
 ): Promise<string | undefined> {
-  const choices = createXaiModelChoices(models, currentModel);
   return ctx.ui.custom<string | undefined>(
     (tui, theme, keybindings, done) =>
-      new XaiModelPicker({
-        choices,
+      new XaiSettingsFlow({
         currentModel,
         theme,
         keybindings,
-        onSelect: done,
+        loadModels,
+        onSelectModel: done,
         onCancel: () => done(undefined),
         requestRender: () => tui.requestRender(),
       }),

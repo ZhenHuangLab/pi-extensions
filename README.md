@@ -38,7 +38,7 @@ Your main Pi session can keep using Claude, GPT, Gemini, or any other model. The
 
 - Live X keyword and semantic search through xAI
 - Default nested model: `grok-4.5`
-- Floating `/xai-search config` model picker with fuzzy search and immediate hot reload
+- Floating `/xai-search config` settings menu with a fuzzy-searchable model picker and immediate hot reload
 - Live model discovery from xAI's `/models` endpoint using Pi-resolved credentials
 - Per-call xAI model override
 - Inclusive UTC date filtering with `from_date` and `to_date`
@@ -108,7 +108,7 @@ Run this command in Pi's interactive TUI:
 /xai-search config
 ```
 
-It opens a centered floating model picker. Type to fuzzy-search models, use Up/Down to navigate, press Enter to select, or Escape to cancel. The catalogue is fetched live from xAI's `GET /v1/models` endpoint using your `/login xai` OAuth session (or `XAI_API_KEY`).
+It opens a centered floating settings menu. Select **Search model** to open the model picker, then type to fuzzy-search models and use Up/Down to navigate. Press Enter to select, or Escape to go back one level: in the model picker it returns to the settings menu, and in the settings menu it closes the dialog. The catalogue is fetched live from xAI's `GET /v1/models` endpoint using your `/login xai` OAuth session (or `XAI_API_KEY`) only after you choose the model option, so closing the settings menu makes no network request.
 
 A selection is applied to the next `xai_search` call immediately—no `/reload` or restart is needed—and is persisted to:
 

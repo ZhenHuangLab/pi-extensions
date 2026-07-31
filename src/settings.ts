@@ -12,15 +12,15 @@ import {
   XAI_SEARCH_CONFIG_FILENAME,
   type XaiSearchConfig,
 } from "./config.ts";
-import { listXaiModels } from "./models.ts";
+import { listXaiModels, type XaiModelInfo } from "./models.ts";
 import { DEFAULT_XAI_SEARCH_MODEL } from "./schema.ts";
-import { selectXaiModel } from "./ui.ts";
+import { selectXaiSettingsMenu } from "./ui.ts";
 
 export interface XaiSearchSettingsOptions {
   configPath?: string;
   fetch?: FetchLike;
   listModels?: typeof listXaiModels;
-  selectModel?: typeof selectXaiModel;
+  openSettings?: typeof selectXaiSettingsMenu;
 }
 
 function errorMessage(error: unknown): string {
@@ -53,7 +53,6 @@ export class XaiSearchSettings {
     }
 
     await this.refresh(ctx);
-    ctx.ui.setStatus("xai-search-config", "Loading xAI models…");
     try {
       await this.selectAndSave(ctx);
     } catch (error) {
@@ -64,17 +63,13 @@ export class XaiSearchSettings {
   }
 
   private async selectAndSave(ctx: ExtensionCommandContext): Promise<void> {
-    const runtime = await resolveXaiRuntime(ctx, this.config.model);
-    const models = await (this.options.listModels ?? listXaiModels)(runtime, {
-      ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
-      ...(ctx.signal ? { signal: ctx.signal } : {}),
-    });
-    ctx.ui.setStatus("xai-search-config", undefined);
-
-    const selectedModel = await (this.options.selectModel ?? selectXaiModel)(
+    const selectedModel = await (this.options.openSettings ?? selectXaiSettingsMenu)(
       ctx,
-      models,
       this.config.model,
+      () => {
+        ctx.ui.setStatus("xai-search-config", "Loading xAI models…");
+        return this.loadModels(ctx).finally(() => ctx.ui.setStatus("xai-search-config", undefined));
+      },
     );
     if (!selectedModel) return;
     if (selectedModel === this.config.model) {
@@ -85,5 +80,13 @@ export class XaiSearchSettings {
     await saveXaiSearchConfig(this.configPath, { model: selectedModel });
     this.config = { model: selectedModel };
     ctx.ui.notify(`xai_search model changed to ${selectedModel} (applied immediately)`, "info");
+  }
+
+  private async loadModels(ctx: ExtensionCommandContext): Promise<XaiModelInfo[]> {
+    const runtime = await resolveXaiRuntime(ctx, this.config.model);
+    return (this.options.listModels ?? listXaiModels)(runtime, {
+      ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+      ...(ctx.signal ? { signal: ctx.signal } : {}),
+    });
   }
 }

@@ -101,23 +101,25 @@ describe("pi extension", () => {
       { id: "grok-4.5", aliases: [] },
       { id: "grok-4.20", aliases: [] },
     ]);
-    const selectModel = vi.fn().mockResolvedValue("grok-4.20");
+    const openSettings = vi.fn().mockResolvedValue("grok-4.20");
     const { pi, registerTool, registerCommand } = extensionApi();
-    registerXaiSearch(pi, { configPath, listModels, selectModel });
+    registerXaiSearch(pi, { configPath, listModels, openSettings });
 
     const command = registerCommand.mock.calls[0]![1];
     const ctx = runtimeContext();
     await command.handler("config", ctx);
 
+    expect(openSettings).toHaveBeenCalledWith(ctx, "grok-4.5", expect.any(Function));
+    expect(listModels).not.toHaveBeenCalled();
+
+    const loadModels = openSettings.mock.calls[0]![2];
+    await expect(loadModels()).resolves.toEqual([
+      { id: "grok-4.5", aliases: [] },
+      { id: "grok-4.20", aliases: [] },
+    ]);
     expect(listModels).toHaveBeenCalledOnce();
-    expect(selectModel).toHaveBeenCalledWith(
-      ctx,
-      [
-        { id: "grok-4.5", aliases: [] },
-        { id: "grok-4.20", aliases: [] },
-      ],
-      "grok-4.5",
-    );
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("xai-search-config", "Loading xAI models…");
+
     expect(JSON.parse(await readFile(configPath, "utf8"))).toMatchObject({ model: "grok-4.20" });
     expect(ctx.ui.notify).toHaveBeenCalledWith(
       "xai_search model changed to grok-4.20 (applied immediately)",
@@ -135,6 +137,24 @@ describe("pi extension", () => {
     const tool = registerTool.mock.calls[0]![0];
     await tool.execute("call-2", { query: "hot reload" }, undefined, undefined, ctx);
     expect(JSON.parse(String(fetch.mock.calls[0]![1]?.body)).model).toBe("grok-4.20");
+  });
+
+  it("does nothing when the settings menu is cancelled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pi-xai-search-extension-"));
+    temporaryDirectories.push(directory);
+    const configPath = join(directory, "config.json");
+    const listModels = vi.fn();
+    const openSettings = vi.fn().mockResolvedValue(undefined);
+    const { pi, registerCommand } = extensionApi();
+    registerXaiSearch(pi, { configPath, listModels, openSettings });
+
+    const command = registerCommand.mock.calls[0]![1];
+    const ctx = runtimeContext();
+    await command.handler("config", ctx);
+
+    expect(openSettings).toHaveBeenCalledWith(ctx, "grok-4.5", expect.any(Function));
+    expect(listModels).not.toHaveBeenCalled();
+    await expect(readFile(configPath, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("loads the persisted model when a new session starts", async () => {

@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.1] - 2026-07-31
+
+### Added
+
+- `/xai-search config` now opens a settings menu first; the fuzzy-searchable model picker appears after selecting **Search model**, and Escape in the picker returns to the settings menu instead of closing the dialog.
 
 ## [0.2.0] - 2026-07-31
 
@@ -27,6 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Cancellation, timeout, validation, and safe error handling.
 - Unit tests and multi-version Node.js CI.
 
-[Unreleased]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/ZhenHuangLab/pi-xai-search/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ZhenHuangLab/pi-xai-search/releases/tag/v0.1.0

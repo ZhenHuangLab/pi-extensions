@@ -1,6 +1,6 @@
 {
   "name": "@zhenhuang/pi-xai-search",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Model-independent live X search for Pi, powered by xAI's native x_search tool",
   "keywords": [
     "grok",
