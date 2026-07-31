@@ -36,8 +36,8 @@ export default function registerXaiSearch(
     name: "xai_search",
     label: "xAI X Search",
     description:
-      "Search live X (Twitter) posts using xAI's server-side x_search. Uses separate `/login xai` credentials and is independent of the active chat model. Supports model/date overrides, handle allow/exclude filters, and image/video understanding. The default request model is configured with `/xai-search config` (initially grok-4.5).",
-    promptSnippet: "Search live X posts through xAI independently of the active chat model",
+      "Search live X (Twitter) posts using xAI's x_search. Supports model/date overrides, handle allow/exclude filters, and image/video understanding.",
+    promptSnippet: "Search live X posts through xAI",
     promptGuidelines: [
       "Use xai_search when the user needs current posts, discussions, reactions, profiles, or threads from X (Twitter).",
     ],

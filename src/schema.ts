@@ -12,7 +12,7 @@ export const xaiSearchSchema = Type.Object(
     }),
     model: Type.Optional(
       Type.String({
-        description: "xAI model for this search (default: grok-4.5)",
+        description: "xAI model override; uses configured model when omitted",
         minLength: 1,
       }),
     ),
