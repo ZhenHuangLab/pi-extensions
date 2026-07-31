@@ -312,3 +312,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security r
 [MIT](LICENSE)
 
 © 2026 ZhenHuangLab
+
+## Acknowledgments
+
+[LINUX DO](https://linux.do) 
