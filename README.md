@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm version" src="https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search?color=cb3837&amp;logo=npm"></a>
   <a href="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://nodejs.org/"><img alt="Node.js 20 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A520-339933?logo=node.js&amp;logoColor=white"></a>
+  <a href="https://nodejs.org/"><img alt="Node.js 22.19 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522.19-339933?logo=node.js&amp;logoColor=white"></a>
   <a href="https://github.com/earendil-works/pi-mono"><img alt="Pi 0.83.0 or newer" src="https://img.shields.io/badge/Pi-%E2%89%A50.83.0-7c3aed"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
 </p>
@@ -174,7 +174,7 @@ Use `pi-xai-search` when you want one portable X-search tool without changing ho
 ## Requirements
 
 - Pi `>= 0.83.0`
-- Node.js `>= 20`
+- Node.js `>= 22.19.0`
 - One of:
   - a successful `/login xai`, or
   - `XAI_API_KEY`
