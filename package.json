@@ -1,0 +1,53 @@
+{
+  "name": "pi-tool-fold",
+  "version": "0.1.0",
+  "description": "Fold completed tool calls in the pi transcript into a single \"Worked for 1m 04s\" line, toggled with a keybinding. Display-only: sessions and tool state are untouched.",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "tui",
+    "transcript",
+    "fold",
+    "collapse"
+  ],
+  "homepage": "https://github.com/ZhenHuangLab/pi-tool-fold#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/pi-tool-fold/issues"
+  },
+  "license": "MIT",
+  "author": "ZhenHuangLab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/pi-tool-fold.git"
+  },
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^7.0.2"
+  }
+}
