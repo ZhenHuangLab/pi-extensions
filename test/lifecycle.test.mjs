@@ -268,10 +268,12 @@ test("ctx.compact at turn_end aborts without automatic model continuation",
     assert.deepEqual(h.errors, []);
   });
 
-test("a turn_end compaction boundary preserves the tool pair and continues",
+test("a turn_end compaction boundary replaces the prefix and preserves the tool pair",
   testOptions, async (t) => {
     let retainedId, signal;
     const summary = "The user requested a noop and a report.";
+    const prefixMarker = "pi-pleat-original-prefix-only";
+    const originalPrompt = `Run the noop and report its result. Source marker: ${prefixMarker}`;
     const h = await fixture(t, [
       toolReply, textReply("continued"), textReply("next prompt"),
     ], (pi) => {
@@ -286,9 +288,15 @@ test("a turn_end compaction boundary preserves the tool pair and continues",
       });
     }, ["validation_noop"]);
     await bounded(
-      h.session.prompt("Run the noop and report its result."), "boundary prompt"
+      h.session.prompt(originalPrompt), "boundary prompt"
     );
     assert.equal(h.requests.length, 2);
+    assert.ok(JSON.stringify(h.requests[0].messages).includes(prefixMarker),
+      "The original prefix must have reached the first request");
+    assert.ok(h.manager.getEntries().some(
+      (entry) => entry.type === "message" && entry.message.role === "user" &&
+        JSON.stringify(entry.message.content).includes(prefixMarker)
+    ), "Compaction must retain the original prompt in raw history");
     assert.ok(signal);
     assert.equal(signal.aborted, false);
     const compactions = h.manager.getEntries().filter(
@@ -300,7 +308,14 @@ test("a turn_end compaction boundary preserves the tool pair and continues",
     assert.equal(compactions[0].systemMessage?.role, "system");
     assert.equal(h.manager.getEntry(retainedId).message.role, "assistant");
     const messages = h.requests[1].messages;
+    assert.equal(JSON.stringify(messages).includes(prefixMarker), false,
+      "The summarized prefix must be absent from the continuation request");
     assert.equal(messages[0].role, "system");
+    assert.deepEqual(
+      messages.filter((message) => message.role !== "system").map((message) => message.role),
+      ["user", "assistant", "toolResult"],
+      "Only the summary and retained tool pair may remain before continuation"
+    );
     assert.ok(messages.some(
       (message) => message.role === "user" &&
         JSON.stringify(message.content).includes(summary)
@@ -319,6 +334,8 @@ test("a turn_end compaction boundary preserves the tool pair and continues",
     assert.equal(h.session.isIdle, true);
     await bounded(h.session.prompt("Start another turn."), "next boundary prompt");
     assert.equal(h.requests.length, 3);
+    assert.equal(JSON.stringify(h.requests[2].messages).includes(prefixMarker), false,
+      "The summarized prefix must not reappear on a later request");
     assert.equal(h.requests[2].signal.aborted, false);
     assert.deepEqual(h.session.messages.at(-1).content, textReply("next prompt"));
     assert.deepEqual(h.errors, []);
