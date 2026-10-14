@@ -5,10 +5,11 @@ Context management and compaction for [Pi](https://github.com/earendil-works/pi)
 **Status: framework design and validation.** This repository contains the design
 and reproducible contract checks. An installable extension is not available yet.
 
-pi-pleat will manage the active conversation through tool-output limits,
-provider-native context editing and compaction, and retrieval of cleared tool
-results. It will preserve valid thinking where supported and use a configurable
-summary model when native compaction is unavailable.
+pi-pleat will manage the active conversation through provider-native context
+editing and compaction, Pi context edits where no native clearing exists, and
+retrieval of cleared tool results. It will preserve valid thinking where
+supported and use a configurable summary model when native compaction is
+unavailable.
 
 ## Design
 

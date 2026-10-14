@@ -11,6 +11,7 @@ Pi 本地检查固定使用 npm `@earendil-works/pi-coding-agent@1.2.0` 和
 - [Session format](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/session-format.md)
 - [Compaction](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/compaction.md)
 - [Anthropic adapter](https://github.com/earendil-works/pi/blob/main/packages/ai/src/api/anthropic-messages.ts)
+- [Classifier models](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/models.md#use-classifier-models)
 
 ## 服务商
 
@@ -31,6 +32,15 @@ Pi 本地检查固定使用 npm `@earendil-works/pi-coding-agent@1.2.0` 和
 - [重建压缩后历史](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2.rs#L480)
 - [客户端保留项规则](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2.rs#L529)
 - [trigger 是请求控制项](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/protocol/src/models.rs#L1292)
+
+## 研究报告
+
+- [Interleaved Thinking Unlocks Reliable MiniMax-M2 Agentic Capability](https://www.minimax.io/news/why-is-interleaved-thinking-important-for-m2)
+  （MiniMax，2025-11-03）：保留与丢弃前几轮 thinking 的基准对照。
+- [The Complexity Trap: Simple Observation Masking Is as Efficient as LLM Summarization for Agent Context Management](https://arxiv.org/abs/2508.21433)
+  （Lindenbauer 等，arXiv:2508.21433）：SWE-agent 中屏蔽旧观察结果与 LLM 摘要的对照。
+
+这些报告说明设计取舍的依据，不代表 pi-pleat 在同类任务上的效果。
 
 ## 相关实现
 

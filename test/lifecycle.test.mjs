@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -588,5 +588,90 @@ test("context edits remain branch-local and persist with opaque compaction detai
     assert.deepEqual(projectedResult(reopened), persistedTarget.message);
     reopened.branch(compactionId);
     assert.deepEqual(projectedResult(reopened).content, replacement);
+    assert.deepEqual(h.errors, []);
+  });
+
+test("rewritten tool results are persisted as the model-visible result",
+  testOptions, async (t) => {
+    const callId = "rewrite-call";
+    const toolSecret = "synthetic-tool-result-secret";
+    const messageSecret = "synthetic-message-end-secret";
+    const visible = textReply(
+      "token=[REDACTED-TOOL] session=[REDACTED-MESSAGE]"
+    );
+    const replaceText = (content, from, to) => content.map((block) =>
+      block.type === "text"
+        ? { ...block, text: block.text.replaceAll(from, to) }
+        : block
+    );
+    const seen = {};
+    const h = await fixture(t, [
+      [{
+        type: "toolCall", id: callId, name: "validation_secret", arguments: {},
+      }],
+      textReply("reported"),
+    ], (pi) => {
+      pi.registerTool({
+        name: "validation_secret", label: "Validation secret",
+        description: "Return text that contains synthetic secret values.",
+        parameters: Type.Object({}),
+        execute: async () => ({
+          content: textReply(`token=${toolSecret} session=${messageSecret}`),
+          details: {},
+        }),
+      });
+      pi.on("tool_result", (event) => {
+        if (event.toolName !== "validation_secret") return;
+        seen.toolResult = JSON.stringify(event.content);
+        return {
+          content: replaceText(event.content, toolSecret, "[REDACTED-TOOL]"),
+        };
+      });
+      pi.on("message_end", (event) => {
+        if (event.message.role !== "toolResult") return;
+        seen.messageEnd = JSON.stringify(event.message.content);
+        return { message: {
+          ...event.message,
+          content: replaceText(
+            event.message.content, messageSecret, "[REDACTED-MESSAGE]"
+          ),
+        } };
+      });
+    }, ["validation_secret"]);
+    await bounded(h.session.prompt("Run the secret tool."), "rewrite prompt");
+
+    // Each handler received the value it rewrites, so the check is not vacuous.
+    assert.ok(seen.toolResult?.includes(toolSecret));
+    assert.ok(seen.toolResult.includes(messageSecret));
+    // message_end runs after tool_result and receives its rewrite.
+    assert.ok(seen.messageEnd?.includes(messageSecret));
+    assert.equal(seen.messageEnd.includes(toolSecret), false);
+
+    assert.equal(h.requests.length, 2);
+    const modelVisible = h.requests[1].messages.filter(
+      (message) => message.role === "toolResult"
+    );
+    assert.equal(modelVisible.length, 1);
+    assert.equal(modelVisible[0].toolCallId, callId);
+    assert.deepEqual(modelVisible[0].content, visible);
+    const requestText = JSON.stringify(h.requests[1].messages);
+    assert.equal(requestText.includes(toolSecret), false);
+    assert.equal(requestText.includes(messageSecret), false);
+
+    const isToolResult = (entry) =>
+      entry.type === "message" && entry.message.role === "toolResult";
+    const stored = h.manager.getEntries().filter(isToolResult);
+    assert.equal(stored.length, 1);
+    assert.deepEqual(stored[0].message.content, visible);
+    const sessionFile = h.manager.getSessionFile();
+    assert.ok(sessionFile);
+    const reopened = SessionManager.open(sessionFile).getEntries()
+      .filter(isToolResult);
+    assert.equal(reopened.length, 1);
+    assert.equal(reopened[0].id, stored[0].id);
+    assert.deepEqual(reopened[0].message.content, visible);
+    const fileText = await readFile(sessionFile, "utf8");
+    assert.equal(fileText.includes(toolSecret), false);
+    assert.equal(fileText.includes(messageSecret), false);
     assert.deepEqual(h.errors, []);
   });

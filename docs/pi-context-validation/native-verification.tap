@@ -1,0 +1,47 @@
+TAP version 13
+# Subtest: live Anthropic: two signed compactions and strict preserved-thinking replay
+ok 1 - live Anthropic: two signed compactions and strict preserved-thinking replay
+  ---
+  duration_ms: 61973.76225
+  type: 'test'
+  ...
+# {"step":"anthropic-baseline-observation","model":"claude-sonnet-5-5","status":200,"rawBlockTypes":["thinking","text"],"contentTypes":["thinking","text"],"thinking":{"type":"adaptive","display":"summarized","block_binding":{"prefix_mismatch_behavior":"error"}},"usage":{"input":226,"output":1570,"cacheRead":0,"cacheWrite":0,"totalTokens":1796,"cost":{"input":0.000452,"output":0.015700000000000002,"cacheRead":0,"cacheWrite":0,"total":0.016152000000000003},"cacheWrite1h":0,"reasoning":1137}}
+# {"step":"anthropic-baseline","model":"claude-sonnet-5-5","status":200,"signedThinking":true,"usage":{"input":226,"output":1570,"cacheRead":0,"cacheWrite":0,"totalTokens":1796,"cost":{"input":0.000452,"output":0.015700000000000002,"cacheRead":0,"cacheWrite":0,"total":0.016152000000000003},"cacheWrite1h":0,"reasoning":1137}}
+# {"step":"anthropic-compact-1","status":200,"rawStop":"compaction","blockCount":1,"normalizedStop":"error","adapterError":"Unhandled stop reason: compaction","rawUsage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"iterations":[{"input_tokens":284,"output_tokens":1636,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"compaction"}]}}
+# {"step":"anthropic-replay-1","status":200,"identifierRetained":true,"transformations":0,"signedThinkingReplayed":1,"usage":{"input":2242,"output":1388,"cacheRead":0,"cacheWrite":0,"totalTokens":3630,"cost":{"input":0.004484,"output":0.013880000000000002,"cacheRead":0,"cacheWrite":0,"total":0.018364000000000002},"cacheWrite1h":0,"reasoning":851}}
+# {"step":"anthropic-compact-2","status":200,"rawStop":"compaction","blockCount":1,"normalizedStop":"error","adapterError":"Unhandled stop reason: compaction","rawUsage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"iterations":[{"input_tokens":2300,"output_tokens":795,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"compaction"}]}}
+# {"step":"anthropic-replay-2","status":200,"identifierRetained":true,"transformations":0,"signedThinkingReplayed":1,"usage":{"input":2329,"output":1429,"cacheRead":0,"cacheWrite":0,"totalTokens":3758,"cost":{"input":0.004658,"output":0.01429,"cacheRead":0,"cacheWrite":0,"total":0.018948},"cacheWrite1h":0,"reasoning":807}}
+# Subtest: live OpenAI Codex: compact output is replayed intact across two compactions
+not ok 2 - live OpenAI Codex: compact output is replayed intact across two compactions
+  ---
+  duration_ms: 823.102584
+  type: 'test'
+  location: '/Users/user/Downloads/pi-context-validation/native.test.mjs:221:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    OpenAI Responses: Codex error: Our servers are currently overloaded. Please try again later.
+    
+    'error' !== 'stop'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'stop'
+  actual: 'error'
+  operator: 'strictEqual'
+  stack: |-
+    assertResponse (file:///Users/user/Downloads/pi-context-validation/native.test.mjs:40:10)
+    request (file:///Users/user/Downloads/pi-context-validation/native.test.mjs:258:5)
+    process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    async TestContext.<anonymous> (file:///Users/user/Downloads/pi-context-validation/native.test.mjs:264:18)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 1
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 63031.3795

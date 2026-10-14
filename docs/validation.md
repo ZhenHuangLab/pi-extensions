@@ -14,7 +14,8 @@
 | `turn_end` 返回 `compaction` 条目 | 提交一次，保留 assistant/toolResult 配对，随后正常继续 |
 | 直接调用 `ctx.modelRegistry.streamSimple()` | 不自动触发扩展请求/响应事件；显式回调生效 |
 
-本仓库另加入嵌套调用以及分支编辑/持久化检查，均已通过。运行结果在下方仓库复测节记录。
+本仓库另加入嵌套调用、分支编辑/持久化，以及改写后工具结果的保存检查，均已通过。
+运行结果在下方仓库复测节记录。
 普通 JSON 数据成功持久化只证明存储契约，不证明原生状态重启后的 API 回放。
 
 ### Anthropic
@@ -125,7 +126,7 @@ OpenAI SDK 为 7.19.0，TypeBox 为 1.3.27。
 | 命令或检查 | 结果 | 证据 |
 | --- | --- | --- |
 | `npm run check` | 两个验证文件语法检查通过 | Node 退出码 0 |
-| `npm test` | 本地 5 项通过，0 失败 | [本地结果](evidence/local-contracts.log) |
+| `npm test` | 本地 6 项通过，0 失败 | [本地结果](evidence/local-contracts.log) |
 | Anthropic 单独真实检查 | 新 HTTP 字段断言及两次压缩/回放通过 | [传输字段复测](evidence/anthropic-http-fields.tap) |
 | Codex Responses-trigger 真实检查 | 两次压缩/回放及移除明文后的事实恢复通过 | [Codex 新入口](evidence/codex-trigger.tap) |
 
@@ -137,9 +138,14 @@ OpenAI SDK 为 7.19.0，TypeBox 为 1.3.27。
   `nestedCalls` 保存调用元数据，不保存子调用结果。
 - `context_edit` 不改原条目；回到编辑前的分支可见原内容；重新打开 JSONL 后，
   当前分支的编辑和压缩 details 数据仍然存在，另一分支的编辑不会生效。
+- 改写后的工具结果会被保存：`tool_result` 和 `message_end` 处理器各遮盖一个合成秘密值。
+  第二次模型请求、会话条目和重新打开的 JSONL 都只含改写后的内容，会话文件中两个原值都不存在；
+  `message_end` 收到的内容已经包含 `tool_result` 的改写。召回按设计读取 JSONL，因此会得到
+  模型看到的版本；召回本身尚未实现。
 
 测试草稿曾遗漏允许调用的子工具名，并把 JSONL 不保存 `undefined` 属性误判为差异。
-修正工具白名单和 JSON 值比较后，上述五项通过；没有修改 Pi 来迎合测试。
+修正工具白名单和 JSON 值比较后，当时的五项通过；没有修改 Pi 来迎合测试。
+改写保存检查首次运行即通过。
 
 新增真实检查在最终 HTTP body 中确认 strict binding 为 `error`，两次回放均带 1 个签名 thinking 块，
 未报告转换。两次原生摘要的 Pi 归一化错误仍然存在，压缩用量仍在 iterations 中。
