@@ -17,7 +17,6 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getConfigPath, loadConfig, saveConfig, type StripPiDocsConfig } from "./src/config.ts";
-import { stripPiDocumentation } from "./src/strip.ts";
 
 export default function stripPiDocsExtension(pi: ExtensionAPI) {
   /** Active for this session only — snapshotted at session_start. */
@@ -107,18 +106,17 @@ export default function stripPiDocsExtension(pi: ExtensionAPI) {
     },
   });
 
-  pi.on("before_agent_start", async (event) => {
-    if (!sessionEnabled) {
-      lastStripped = false;
-      return undefined;
-    }
+  pi.on("before_agent_start", (event) => {
+    lastStripped = false;
+    if (!sessionEnabled) return;
 
-    const { text, stripped } = stripPiDocumentation(event.systemPrompt);
-    lastStripped = stripped;
-    if (!stripped) {
-      return undefined;
-    }
+    const options = event.systemPromptOptions;
+    if (options.forceSystemPrompt !== undefined) return;
+    if (options.customPrompt && !options.sections.docs) return;
 
-    return { systemPrompt: text };
+    const previousPrompt = event.systemPrompt;
+    // Pi 1.2.0 ignores empty section overrides; a newline leaves only the docs wrapper.
+    options.sections.docs = "\n";
+    lastStripped = event.systemPrompt !== previousPrompt;
   });
 }

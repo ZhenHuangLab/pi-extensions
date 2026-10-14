@@ -29,7 +29,7 @@
     ".": "./index.ts"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.80.0"
+    "@earendil-works/pi-coding-agent": ">=1.2.0"
   },
   "engines": {
     "node": ">=18"
