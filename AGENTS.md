@@ -1,7 +1,7 @@
 # pi-pleat
 
-The current phase is framework design and contract validation. Keep production
-plugin implementation out of design-only changes.
+Version 0.1.0 of the extension is implemented. Every change must keep the
+validation discipline below and in `docs/roadmap.md`.
 
 Read `docs/architecture.md` and `docs/validation.md` before changing the design.
 Separate verified SDK behavior, provider observations, and proposed behavior.
