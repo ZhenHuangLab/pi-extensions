@@ -1,24 +1,33 @@
 {
   "name": "pi-pleat",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Design and validation for Pi context management and compaction",
+  "version": "0.1.0",
+  "description": "Context management for Pi: clears old tool output, recalls it on demand, and uses native compaction on Anthropic and OpenAI Responses models",
   "type": "module",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "files": ["src", "README.md", "LICENSE"],
+  "pi": { "extensions": ["./src/index.ts"] },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZhenHuangLab/pi-pleat.git"
   },
-  "engines": {
-    "node": ">=22.19.0"
-  },
+  "engines": { "node": ">=22.19.0" },
   "scripts": {
-    "check": "node --check test/lifecycle.test.mjs && node --check test/native.test.mjs",
-    "test": "node --test test/lifecycle.test.mjs",
-    "test:live": "node --test test/native.test.mjs"
+    "check": "tsc -p tsconfig.json && for file in test/*.mjs; do node --check \"$file\" || exit; done",
+    "test": "node --test test/*.test.mjs",
+    "test:live": "PI_CONTEXT_LIVE=1 node --test test/live.test.mjs test/native.test.mjs"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
   },
   "devDependencies": {
+    "@earendil-works/pi-agent-core": "1.2.0",
     "@earendil-works/pi-ai": "1.2.0",
     "@earendil-works/pi-coding-agent": "1.2.0",
-    "typebox": "1.3.27"
+    "@types/node": "22.20.5",
+    "typebox": "1.3.27",
+    "typescript": "6.0.3"
   }
 }
