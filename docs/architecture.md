@@ -47,7 +47,7 @@ pi-pleat 管理当前会话的上下文大小和压缩过程。处理顺序是�
 | `requests.ts` | 请求快照、已发送边界与 Pi 条目的对应；构建回放请求 | 决定何时压缩 |
 | `compact.ts` | 唯一压缩协调器；选择方法；检查取消、状态和覆盖范围 | 自己追加第二份压缩记录 |
 | `providers/anthropic.ts` | 清理参数；原生摘要请求和完整响应；签名块检查 | 把 Pi 归一化错误当作成功 |
-| `providers/openai.ts` | 独立压缩请求；整个返回窗口的保留 | 从返回窗口挑选部分项目 |
+| `providers/openai.ts` | 按 API 选择原生压缩协议；完整保留其状态 | 混用独立压缩与 Codex 流式压缩的窗口规则 |
 | `fallback.ts` | 用指定模型或会话模型生成 Pi 格式摘要 | 擅自切换到未配置的服务商 |
 | `status.ts` | `/context`、状态栏与有限诊断 | 添加模型提示或工具 |
 
@@ -89,7 +89,7 @@ Pi 会话条目保留原始消息和分支关系。原生压缩块或窗口放�
 
 | 字段 | 含义 |
 | --- | --- |
-| `version`、`strategy` | 插件数据格式和 Anthropic/OpenAI/Pi 摘要方式 |
+| `version`、`strategy` | 插件数据格式和 Anthropic、OpenAI 独立压缩、Codex Responses-trigger 或 Pi 摘要方式 |
 | `provider`、`api`、`endpoint`、`model` | 生成结果的真实通道；端点不含凭据或秘密查询参数 |
 | `firstCoveredEntryId`、`lastCoveredEntryId` | 被替换的连续前缀范围 |
 | `firstKeptEntryId` | 紧随前缀的保留条目 |
@@ -143,8 +143,9 @@ Pi 的 `keepRecentTokens` 是保留目标；安全边界优先。不仅检查数
 以及压缩后的 checkpoint 能重建相同的保留消息。无法证明边界、状态或覆盖一致时，
 该候选不进入原生回放路径，改用明确的文本摘要路径。
 
-两个服务商都压缩选定的、工具配对完整的连续前缀。OpenAI 返回的整个窗口是**该前缀**
-的新表示；然后仅追加它未覆盖的保留后缀。不要发送整个当前窗口去压缩后，又追加一份已覆盖的近期历史。
+两个服务商都压缩选定的、工具配对完整的连续前缀。OpenAI 独立压缩返回的整个窗口是**该前缀**
+的新表示；Codex 流式压缩则按下节的客户端规则构建该前缀的新表示。然后仅追加未覆盖的保留后缀。
+不要发送整个当前窗口去压缩后，又追加一份已覆盖的近期历史。
 这使 Pi 的 `firstKeptEntryId` 保持明确，也避免依赖手动压缩结果类型尚未表达的 retain-none 行为。
 
 连续第二次压缩应包含当前有效的原生前缀及新覆盖的内容。回放规则与第一次相同。
@@ -175,9 +176,20 @@ thinking 设置。适配器必须读取到合法完成状态、完整签名块�
 支持独立压缩的 Responses 通道使用官方 OpenAI SDK。保留返回 `output` 的所有项目，
 包括 opaque compaction 和其他保留项目，作为被压缩前缀的完整替代。
 
-能力缓存按 `(provider, api, endpoint, model, feature)` 区分。当前实测的 Codex 订阅端点
-返回 404，不能据此禁止所有 OpenAI 通道，也不能因普通请求成功就继续反复调用该端点。
-原生端点不可用时使用文本压缩。
+Codex 使用其官方客户端的 Responses-trigger 协议：向普通 Responses 输入末尾追加
+`{type: "compaction_trigger"}`，等待 `response.completed` 和恰好一个完整 compaction 项。
+复用 Pi 现有的 Responses 传输，通过独立调用的显式原始流回调捕获压缩项。
+控制项不进入持久历史。这个协议没有返回一个可直接替换全部输入的完整窗口；
+客户端保留规定的用户/控制消息，再放入完整的原生 compaction 项。
+
+两种协议的窗口处理分别定义。不能把独立 `/compact` 的“完整 output 原样回放”
+套用到 Codex 的流式响应，也不能把 Codex 的客户端保留规则套用到独立 `/compact` 输出。
+简单文本 fixture 只验证保留普通用户消息的情况；开发者消息、工具结果、图片和多代理项
+仍需单独验证策略与预算。
+
+能力缓存按 `(provider, api, endpoint, model, feature)` 区分，feature 还区分压缩协议。
+已测 Codex 独立压缩路径返回 404，只证明该路径不可用。Codex 原生路径按官方客户端源码查证，
+不继续反复尝试旧路径。当前 API 对应的原生方法不可用时使用文本压缩。
 
 跨服务商切换时不发送其他服务商的原生块。Anthropic 可读摘要可以作为文本交接；
 OpenAI 的 opaque 窗口需要从本地原文生成一次可读摘要。客户端不删除原始 thinking；

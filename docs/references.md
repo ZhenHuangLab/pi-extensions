@@ -20,6 +20,18 @@ Pi 本地检查固定使用 npm `@earendil-works/pi-coding-agent@1.2.0` 和
 - [Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing)
 - [OpenAI compaction](https://developers.openai.com/api/docs/guides/compaction)
 
+### Codex 开源客户端
+
+查证版本为 OpenAI/codex 的
+[`95273b84fbff40f9df7d71d50f1ca52c6489b25d`](https://github.com/openai/codex/commit/95273b84fbff40f9df7d71d50f1ca52c6489b25d)
+（2026-10-14）。这比仅根据某个 HTTP 端点状态判断 Codex 能力更直接：
+
+- [请求追加 compaction_trigger](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2_attempt.rs#L172)
+- [等待完整终止与一个压缩项](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2.rs#L375)
+- [重建压缩后历史](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2.rs#L480)
+- [客户端保留项规则](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/core/src/compact_remote_v2.rs#L529)
+- [trigger 是请求控制项](https://github.com/openai/codex/blob/95273b84fbff40f9df7d71d50f1ca52c6489b25d/codex-rs/protocol/src/models.rs#L1292)
+
 ## 相关实现
 
 - [pi-better-compaction](https://github.com/lll9p/pi-better-compaction)

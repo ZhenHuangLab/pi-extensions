@@ -50,10 +50,13 @@ PI_CONTEXT_LIVE=1 node --test --test-name-pattern="live Anthropic" test/native.t
 The default models are `claude-sonnet-5-5` and `gpt-6-astra`. Override them with
 `PI_CONTEXT_ANTHROPIC_MODEL` and `PI_CONTEXT_OPENAI_MODEL`.
 
-The tested Codex subscription endpoint returned HTTP 404 for standalone
-compaction. Its live check remains failing; see the validation record for the
-exact endpoint and evidence. The OpenAI API-key endpoint remains untested.
+The Codex check follows the official client's `compaction_trigger` protocol on
+the normal Responses endpoint. Two compact/replay cycles passed on the tested
+subscription route. The earlier standalone `/responses/compact` request returned
+404; that evidence remains in the validation record. The OpenAI API-key
+standalone endpoint remains untested.
 
-The checks use only synthetic conversation content. Identifier recovery measures
-the replayed window, not the quality of the summary alone. A passed small fixture
-does not establish cost savings, long-task quality, or full-window reliability.
+The checks use only synthetic conversation content. The Codex check also removes
+an assistant-only fact from plaintext replay input and verifies its recovery from
+the compacted state. These small fixtures do not establish general summary
+quality, cost savings, long-task quality, or full-window reliability.

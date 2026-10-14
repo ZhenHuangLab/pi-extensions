@@ -4,7 +4,6 @@ import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { zstdDecompressSync } from "node:zlib";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import OpenAI from "openai";
 
 // Explicit opt-in: these checks make real, billable model requests.
 const live = process.env.PI_CONTEXT_LIVE === "1";
@@ -224,7 +223,7 @@ test("live Anthropic: two signed compactions and strict preserved-thinking repla
   }
 });
 
-test("live OpenAI Codex: compact output is replayed intact across two compactions", {
+test("live OpenAI Codex: Responses compaction_trigger supports two compact-replay cycles", {
   skip: !live,
   timeout: 240_000,
 }, async (t) => {
@@ -232,15 +231,33 @@ test("live OpenAI Codex: compact output is replayed intact across two compaction
   const model = runtime.getModel("openai-codex", process.env.PI_CONTEXT_OPENAI_MODEL ?? "gpt-6-astra");
   assert.ok(model, "Configured OpenAI Codex model must exist");
   const marker = `project-${randomUUID()}`;
-  const first = user(`Our synthetic project identifier is ${marker}. The release must retain JSONL sessions and support branch-local compaction. Confirm these three facts briefly.`);
-  let transport;
+  // The marker exists only in an assistant message that will be removed.
+  // Retained user messages cannot answer the later lookup on their own.
+  const seed = [
+    user("Keep the project identifier assigned in the following assistant message. Only reveal it when requested."),
+    {
+      role: "assistant",
+      content: [{ type: "text", text: `The assigned project identifier is ${marker}.` }],
+      api: model.api, provider: model.provider, model: model.id,
+      stopReason: "stop", timestamp: Date.now(),
+      usage: {
+        input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    },
+    user("Acknowledge readiness with READY only."),
+  ];
 
-  async function request(messages, input) {
+  async function request(input) {
     let sent;
     let wire;
     let completed;
     let status;
-    const result = await runtime.streamSimple(model, { systemPrompt, messages }, {
+    let endpoint;
+    let completedCount = 0;
+    const output = [];
+    const failedEvents = [];
+    const result = await runtime.streamSimple(model, { systemPrompt, messages: seed }, {
       reasoning: "low",
       maxTokens: 1024,
       maxRetries: 0,
@@ -248,80 +265,91 @@ test("live OpenAI Codex: compact output is replayed intact across two compaction
       cacheRetention: "none",
       signal: AbortSignal.any([t.signal, AbortSignal.timeout(60_000)]),
       fetch: (url, init) => captureRequest(url, init, (request, body) => {
-        transport = { url: request.url, headers: request.headers };
+        endpoint = new URL(request.url);
         wire = body;
       }),
       onPayload(payload) {
-        sent = structuredClone(payload);
+        // Pi can emit optional fields such as phase: undefined for assistant
+        // text. Snapshot JSON values, which are what the transport can send.
+        sent = JSON.parse(JSON.stringify(payload));
         if (input) sent.input = structuredClone(input);
         return sent;
       },
       onResponse(response) { status = response.status; },
       onProviderStreamEvent(event) {
-        if (event.type === "response.completed") completed = structuredClone(event.response);
+        if (["error", "response.failed", "response.incomplete"].includes(event.type)) failedEvents.push(event.type);
+        if (event.type === "response.output_item.done") output.push(structuredClone(event.item));
+        if (event.type === "response.completed") {
+          completed = structuredClone(event.response);
+          completedCount++;
+        }
       },
     }).result();
     assertResponse(result, "OpenAI Responses");
-    assert.ok(completed?.output, "Require a completed raw response");
+    assert.deepEqual(failedEvents, [], "Failed or incomplete streams cannot supply replayable state");
+    assert.equal(status, 200, "Require a successful Responses request");
+    assert.equal(completedCount, 1, "Require exactly one terminal response.completed event");
+    assert.equal(completed?.status, "completed", "An incomplete response cannot supply compaction state");
+    assert.ok(Array.isArray(completed.output), "Require a completed output window");
+    assert.ok(isDeepStrictEqual(output, completed.output), "Completed output must match the finalized stream items");
     assert.ok(isDeepStrictEqual(wire?.input, sent.input), "Transport must send the intended complete input");
-    return { result, sent: wire, completed, status };
+    assert.equal(wire.store, false, "Use stateless input-array replay");
+    assert.equal(wire.previous_response_id, undefined, "Replay must not depend on server-side history");
+    return { result, sent: wire, output, completed, status, endpoint };
   }
 
-  let previous = await request([first]);
-  assert.ok(transport?.url, "Capture the actual configured Responses endpoint");
-  assert.ok(textOf(previous.result).includes(marker), "Baseline must retain the identifier");
-  const endpoint = new URL(transport.url);
-  assert.ok(endpoint.pathname.endsWith("/responses"), "Expected a Responses endpoint");
-  endpoint.pathname = endpoint.pathname.slice(0, -"/responses".length);
-  endpoint.search = "";
-  const headers = new Headers(transport.headers);
-  for (const name of ["content-length", "content-encoding", "content-type", "accept"]) headers.delete(name);
-  const auth = await runtime.getAuth(model, { signal: t.signal });
-  assert.ok(auth?.auth.apiKey, "Require the same provider's configured authentication");
-  const client = new OpenAI({
-    apiKey: auth.auth.apiKey,
-    baseURL: endpoint.href,
-    defaultHeaders: Object.fromEntries(headers),
-    maxRetries: 0,
-    timeout: 60_000,
-    fetch: async (url, init) => {
-      const actual = new URL(String(url));
-      assert.equal(actual.origin, endpoint.origin, "Compaction must use the authenticated provider's origin");
-      assert.equal(actual.pathname, `${endpoint.pathname}/responses/compact`, "Verify the actual compact endpoint");
-      const response = await fetch(url, { ...init, redirect: "error" });
-      diagnostic(t, "openai-compact-http", {
-        endpoint: actual.origin + actual.pathname, status: response.status,
-      });
-      return response;
-    },
-  });
-  diagnostic(t, "openai-baseline", {
+  let previous = await request();
+  const endpoint = previous.endpoint;
+  assert.ok(endpoint?.pathname.endsWith("/responses"), "Use the actual configured Responses endpoint");
+  assert.ok(JSON.stringify(previous.sent.input).includes(marker),
+    "The original assistant-only fact must reach the provider");
+  diagnostic(t, "codex-baseline", {
     model: model.id, status: previous.status,
     endpoint: endpoint.origin + endpoint.pathname,
     usage: previous.result.usage,
   });
   for (let round = 1; round <= 2; round++) {
-    const compacted = await client.responses.compact({
-      model: previous.sent.model,
-      instructions: previous.sent.instructions,
-      input: [...previous.sent.input, ...previous.completed.output],
-    }, { signal: AbortSignal.any([t.signal, AbortSignal.timeout(60_000)]) });
-    assert.ok(Array.isArray(compacted.output) && compacted.output.length > 0);
-    assert.ok(compacted.output.some((item) => item.type === "compaction" && item.encrypted_content),
-      "Require an encrypted compaction item");
-    const input = [
-      ...structuredClone(compacted.output),
-      { role: "user", content: "State our project identifier and the two release requirements." },
-    ];
-    const replay = await request([first], input);
-    assert.equal(replay.sent.input.length, compacted.output.length + 1, "Append exactly one new user message");
-    assert.ok(isDeepStrictEqual(replay.sent.input.slice(0, compacted.output.length), compacted.output),
-      "Replay the entire returned window without pruning or duplication");
-    assert.ok(textOf(replay.result).includes(marker), "The replayed window must retain the identifier");
-    diagnostic(t, `openai-compact-replay-${round}`, {
+    const history = [...previous.sent.input, ...previous.output];
+    assert.equal(history.some((item) => item.type === "compaction_trigger"), false,
+      "A compaction trigger is request control, not persistent history");
+    const compacted = await request([...history, { type: "compaction_trigger" }]);
+    assert.equal(compacted.endpoint.href, endpoint.href, "Use the same authenticated Responses endpoint");
+    assert.deepEqual(compacted.sent.input.at(-1), { type: "compaction_trigger" });
+    const compactionItems = compacted.output.filter((item) => item.type === "compaction");
+    diagnostic(t, `codex-compact-${round}`, {
+      status: compacted.status, endpoint: endpoint.origin + endpoint.pathname,
       outputTypes: compacted.output.map((item) => item.type),
-      fullWindowReplayed: true, identifierRecoveredFromWindow: true,
-      compactUsage: compacted.usage, replayUsage: replay.result.usage,
+      completed: true, usage: compacted.completed.usage,
+    });
+    assert.equal(compactionItems.length, 1, "Require exactly one finalized compaction item");
+    const block = compactionItems[0];
+    assert.ok(typeof block.encrypted_content === "string" && block.encrypted_content.length > 0,
+      "Require nonempty encrypted compaction state");
+    // This fixture has only ordinary user/assistant/compaction items.
+    // Follow Codex's streamed-compaction policy: retained user messages, then
+    // the complete new compaction item. Standalone /compact has a different
+    // contract: its entire returned window must be used without pruning.
+    const retained = history.filter((item) => item.role === "user");
+    assert.equal(JSON.stringify(retained).includes(marker), false,
+      "The retained plaintext must not contain the answer");
+    const input = [
+      ...structuredClone(retained),
+      structuredClone(block),
+      { role: "user", content: "What is the recorded project identifier? Reply with the exact identifier only." },
+    ];
+    const replay = await request(input);
+    assert.equal(replay.endpoint.href, endpoint.href);
+    assert.equal(replay.sent.input.length, retained.length + 2, "No covered assistant history may be reinserted");
+    assert.ok(isDeepStrictEqual(replay.sent.input[retained.length], block),
+      "Replay the complete compaction item without altering encrypted state or metadata");
+    const plaintext = replay.sent.input.map(({ encrypted_content: _encrypted, ...item }) => item);
+    assert.equal(JSON.stringify({ ...replay.sent, input: plaintext }).includes(marker), false,
+      "The actual replay body must not contain the removed plaintext answer");
+    assert.equal(textOf(replay.result).trim(), marker, "Recover the identifier from the compacted state");
+    diagnostic(t, `codex-replay-${round}`, {
+      status: replay.status, compactionItems: 1,
+      exactCompactionItemReplayed: true, answerAbsentFromPlaintext: true,
+      identifierRecovered: true, usage: replay.completed.usage,
     });
     previous = replay;
   }
