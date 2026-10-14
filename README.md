@@ -48,7 +48,7 @@ PI_CONTEXT_LIVE=1 npm run test:live
 PI_CONTEXT_LIVE=1 node --test --test-name-pattern="live Anthropic" test/native.test.mjs
 ```
 
-The default models are `claude-sonnet-5-5` and `gpt-6-astra`. Override them with
+The default models are `claude-haiku-5-5` and `gpt-6-luna`. Override them with
 `PI_CONTEXT_ANTHROPIC_MODEL` and `PI_CONTEXT_OPENAI_MODEL`.
 
 The Codex check follows the official client's `compaction_trigger` protocol on
