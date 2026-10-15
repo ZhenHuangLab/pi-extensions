@@ -1,12 +1,13 @@
 {
   "name": "pi-better-explore",
-  "version": "0.2.1",
-  "description": "Tool-boundary enforcement for pi: routes codebase exploration onto bounded search and read tools, keeping the prompt-cache prefix intact",
+  "version": "0.3.0",
+  "description": "Tool-boundary enforcement for pi: routes codebase search to sift-light and bounded tools, blocks only large bash dumps, and keeps the prompt-cache prefix intact",
   "keywords": [
     "pi-package",
     "pi-extension",
     "search",
     "grep",
+    "sift-light",
     "explore",
     "context"
   ],
