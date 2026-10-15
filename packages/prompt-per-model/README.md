@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/v/prompt-per-model" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/dm/prompt-per-model" alt="npm downloads per month"></a>
-  <a href="https://github.com/ZhenHuangLab/prompt-per-model/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/prompt-per-model" alt="GitHub tag"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-extensions/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=prompt-per-model%40*" alt="GitHub tag"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="Tested with Pi 1.2.0">
 </p>
@@ -66,19 +66,19 @@ The files are read again before each message, so an edit applies from the next m
 files that cannot be used, such as a file with invalid frontmatter or no text. The footer shows the
 matching files.
 
+## Development
+
+Run these commands from the repository root:
+
+```sh
+npm ci
+npm run check --workspace=prompt-per-model
+```
+
 ## Maintainer releases
 
-Automatic publication requires one-time authorization on npm. In this package's
-**Settings → Trusted Publisher → GitHub Actions**, set owner to `ZhenHuangLab`, repository to
-`prompt-per-model`, workflow filename to `publish.yml` (filename only), and leave environment blank.
-Enable **Allow npm publish**; npm may otherwise allow staged publication only. The workflow uses
-[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no stored npm token
-is needed.
-
-Update the version in `package.json` and the tracked `package-lock.json`, then push the commit and
-matching `v<version>` tag and publish a GitHub Release for that tag. Publishing the GitHub Release
-triggers npm publication; a tag push alone does not. GitHub prereleases and versions with a SemVer
-prerelease suffix publish to `next`; stable releases publish to `latest`.
+See [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)
+for versioning, package tags, and npm trusted publishing.
 
 ## License
 

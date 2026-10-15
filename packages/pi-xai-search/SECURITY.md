@@ -6,7 +6,7 @@ Security fixes are provided for the latest published version of `@zhenhuang/pi-x
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/ZhenHuangLab/pi-xai-search/security/advisories/new).
+Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/ZhenHuangLab/pi-extensions/security/advisories/new).
 
 Do not include real xAI credentials, OAuth tokens, private posts, or unredacted Pi configuration in a report. A sanitized proof of concept is sufficient.
 

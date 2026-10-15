@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/strip-pi-docs)](https://www.npmjs.com/package/strip-pi-docs)
 [![npm downloads per month](https://img.shields.io/npm/dm/strip-pi-docs)](https://www.npmjs.com/package/strip-pi-docs)
-[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/strip-pi-docs)](https://github.com/ZhenHuangLab/strip-pi-docs/tags)
+[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=strip-pi-docs%40*)](https://github.com/ZhenHuangLab/pi-extensions/tags)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Pi extension that removes the built-in **Pi documentation** pointer from the system prompt.
@@ -70,19 +70,19 @@ Forced system prompts are left unchanged. Custom prompts without a documentation
 
 Override the config path with `STRIP_PI_DOCS_CONFIG` (useful for tests).
 
+## Development
+
+Run these commands from the repository root:
+
+```bash
+npm ci
+npm run check --workspace=strip-pi-docs
+```
+
 ## Maintainer releases
 
-Automatic publication requires one-time authorization on npm. In this package's
-**Settings → Trusted Publisher → GitHub Actions**, set owner to `ZhenHuangLab`, repository to
-`strip-pi-docs`, workflow filename to `publish.yml` (filename only), and leave environment blank.
-Enable **Allow npm publish**; npm may otherwise allow staged publication only. The workflow uses
-[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no stored npm token
-is needed.
-
-Update the version in `package.json`, then push the commit and matching `v<version>` tag and publish
-a GitHub Release for that tag. Publishing the GitHub Release triggers npm publication; a tag push
-alone does not. GitHub prereleases and versions with a SemVer prerelease suffix publish to `next`;
-stable releases publish to `latest`.
+See [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)
+for versioning, package tags, and npm trusted publishing.
 
 ## License
 

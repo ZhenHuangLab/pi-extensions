@@ -1,6 +1,6 @@
 {
   "name": "prompt-per-model",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Per-model system prompts for Pi: adds the Markdown files that match the current model to the system prompt",
   "type": "module",
   "keywords": [
@@ -12,9 +12,13 @@
   "author": "ZhenHuangLab",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZhenHuangLab/prompt-per-model.git"
+    "url": "git+https://github.com/ZhenHuangLab/pi-extensions.git",
+    "directory": "packages/prompt-per-model"
   },
-  "homepage": "https://github.com/ZhenHuangLab/prompt-per-model#readme",
+  "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/prompt-per-model#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/pi-extensions/issues"
+  },
   "files": [
     "src",
     "README.md",

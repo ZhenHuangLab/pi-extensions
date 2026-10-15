@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+### Patch Changes
+
+- Move source and package metadata into the pi-extensions monorepo while retaining independent package versions and releases. Source behavior is unchanged.
+- Update the development Pi SDK and formatter to remove known vulnerabilities in the development dependency tree.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

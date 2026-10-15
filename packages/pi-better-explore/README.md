@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/pi-better-explore?color=cb3837&logo=npm)](https://www.npmjs.com/package/pi-better-explore)
 [![npm monthly downloads](https://img.shields.io/npm/dm/pi-better-explore)](https://www.npmjs.com/package/pi-better-explore)
-[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/pi-better-explore)](https://github.com/ZhenHuangLab/pi-better-explore/tags)
+[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=pi-better-explore%40*)](https://github.com/ZhenHuangLab/pi-extensions/tags)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Keeps codebase exploration small and fast by turning exploration conventions
@@ -103,15 +103,16 @@ pi install npm:pi-better-explore
 
 No configuration. Disable with `pi config`.
 
+## Development
+
+Run these commands from the repository root:
+
+```bash
+npm ci
+npm run check --workspace=pi-better-explore
+```
+
 ## Maintainer releases
 
-For one-time setup, open the npm package's **Settings → Trusted Publisher → GitHub Actions**.
-Set owner to `ZhenHuangLab`, repository to `pi-better-explore`, and workflow
-filename to `publish.yml`. Leave environment blank. You must enable
-**Allow npm publish**; the default may allow only staging. Publishing uses OIDC
-without a stored npm token.
-
-Update the version in `package.json` and any tracked lockfile, then push the
-commit and matching `v<version>` tag. Publish a GitHub Release for that tag to
-run the workflow; pushing the tag alone does not trigger it. Prereleases publish
-to `next`; stable releases publish to `latest`. Do not move old tags.
+See [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)
+for versioning, package tags, and npm trusted publishing.

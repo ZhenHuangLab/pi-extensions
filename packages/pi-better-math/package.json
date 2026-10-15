@@ -1,6 +1,6 @@
 {
   "name": "pi-better-math",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typeset LaTeX math in Pi's TUI as multi-line Unicode art",
   "keywords": [
     "pi-package",
@@ -11,15 +11,16 @@
     "unicode",
     "tui"
   ],
-  "homepage": "https://github.com/ZhenHuangLab/pi-better-math#readme",
+  "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/pi-better-math#readme",
   "bugs": {
-    "url": "https://github.com/ZhenHuangLab/pi-better-math/issues"
+    "url": "https://github.com/ZhenHuangLab/pi-extensions/issues"
   },
   "license": "GPL-3.0-or-later",
   "author": "ZhenHuangLab",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZhenHuangLab/pi-better-math.git"
+    "url": "git+https://github.com/ZhenHuangLab/pi-extensions.git",
+    "directory": "packages/pi-better-math"
   },
   "files": [
     "index.ts",
@@ -36,6 +37,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "check": "node --check index.ts && node --check transform.ts && node --check render-worker.mjs"
   },
   "engines": {
     "node": ">=22"

@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/v/pi-pleat" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/dm/pi-pleat" alt="npm downloads per month"></a>
-  <a href="https://github.com/ZhenHuangLab/pi-pleat/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-pleat" alt="GitHub tag"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-extensions/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=pi-pleat%40*" alt="GitHub tag"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="Tested with Pi 1.2.0">
 </p>
@@ -31,8 +31,8 @@ pi install npm:pi-pleat
 To install from a local clone instead:
 
 ```sh
-git clone https://github.com/ZhenHuangLab/pi-pleat
-pi install ./pi-pleat
+git clone https://github.com/ZhenHuangLab/pi-extensions.git
+pi install ./pi-extensions/packages/pi-pleat
 ```
 
 pi-pleat is developed and tested with Pi 1.2.0. It needs no settings.
@@ -191,21 +191,21 @@ the design; both are in Chinese.
 
 ## Development
 
-Requires Node.js 22.19.0 or later.
+Requires Node.js 22.19.0 or later. Run these commands from the repository root:
 
 ```sh
 npm ci
-npm run check   # type check, and syntax check of the tests
-npm test        # local tests; the live checks are skipped
+npm run check --workspace=pi-pleat   # type check, and syntax check of the tests
+npm test --workspace=pi-pleat        # local tests; the live checks are skipped
 ```
 
 The live checks make real requests and can incur charges:
 
 ```sh
-npm run test:live
+npm run test:live --workspace=pi-pleat
 
 # Only the integrated Anthropic check
-PI_CONTEXT_LIVE=1 node --test --test-name-pattern="live integrated Anthropic" test/live.test.mjs
+PI_CONTEXT_LIVE=1 npm exec --workspace=pi-pleat -- node --test --test-name-pattern="live integrated Anthropic" test/live.test.mjs
 ```
 
 They use your Pi credentials for `anthropic` and `openai-codex` and open the credential store
@@ -218,17 +218,8 @@ to use other models.
 
 ## Maintainer releases
 
-Automatic publication requires one-time authorization on npm. In this package's
-**Settings → Trusted Publisher → GitHub Actions**, set owner to `ZhenHuangLab`, repository to
-`pi-pleat`, workflow filename to `publish.yml` (filename only), and leave environment blank.
-Enable **Allow npm publish**; npm may otherwise allow staged publication only. The workflow uses
-[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no stored npm token
-is needed.
-
-Update the version in `package.json` and the tracked `package-lock.json`, then push the commit and
-matching `v<version>` tag and publish a GitHub Release for that tag. Publishing the GitHub Release
-triggers npm publication; a tag push alone does not. GitHub prereleases and versions with a SemVer
-prerelease suffix publish to `next`; stable releases publish to `latest`.
+See [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)
+for versioning, package tags, and npm trusted publishing.
 
 ## License
 

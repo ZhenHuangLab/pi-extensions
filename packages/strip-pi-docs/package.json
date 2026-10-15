@@ -1,26 +1,28 @@
 {
   "name": "strip-pi-docs",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pi extension that strips the built-in Pi documentation pointer from the system prompt",
   "keywords": [
     "pi-package",
     "pi-extension",
     "system-prompt"
   ],
-  "homepage": "https://github.com/ZhenHuangLab/strip-pi-docs#readme",
+  "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/strip-pi-docs#readme",
   "bugs": {
-    "url": "https://github.com/ZhenHuangLab/strip-pi-docs/issues"
+    "url": "https://github.com/ZhenHuangLab/pi-extensions/issues"
   },
   "license": "MIT",
   "author": "ZhenHuangLab",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZhenHuangLab/strip-pi-docs.git"
+    "url": "git+https://github.com/ZhenHuangLab/pi-extensions.git",
+    "directory": "packages/strip-pi-docs"
   },
   "files": [
     "index.ts",
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "type": "module",
@@ -28,11 +30,19 @@
   "exports": {
     ".": "./index.ts"
   },
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=1.2.0"
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3"
   },
   "pi": {
     "extensions": [

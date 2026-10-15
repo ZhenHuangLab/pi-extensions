@@ -1,8 +1,12 @@
 node_modules/
 coverage/
 dist/
-*.tgz
 .DS_Store
+*.tgz
+*.log
+.pi/
+.pi-lens/
+artifacts/
 .env
 .env.*
 !.env.example

@@ -1,6 +1,6 @@
 {
   "name": "pi-better-explore",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Tool-boundary enforcement for pi: routes codebase search to sift-light and bounded tools, blocks only large bash dumps, and keeps the prompt-cache prefix intact",
   "keywords": [
     "pi-package",
@@ -11,15 +11,16 @@
     "explore",
     "context"
   ],
-  "homepage": "https://github.com/ZhenHuangLab/pi-better-explore#readme",
+  "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/pi-better-explore#readme",
   "bugs": {
-    "url": "https://github.com/ZhenHuangLab/pi-better-explore/issues"
+    "url": "https://github.com/ZhenHuangLab/pi-extensions/issues"
   },
   "license": "MIT",
   "author": "ZhenHuangLab",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZhenHuangLab/pi-better-explore.git"
+    "url": "git+https://github.com/ZhenHuangLab/pi-extensions.git",
+    "directory": "packages/pi-better-explore"
   },
   "type": "module",
   "main": "./index.ts",
@@ -30,6 +31,7 @@
     "index.ts",
     "src",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -46,7 +48,11 @@
       "./index.ts"
     ]
   },
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0",
     "@types/node": "^26.4.0",
     "typescript": "^7.0.2"
   }

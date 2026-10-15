@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- Move source and package metadata into the pi-extensions monorepo while retaining independent package versions and releases. Source behavior is unchanged.
+
 ## 0.1.0
 
 First public release of `pi-better-math` (formerly developed as `pi-math-typeset`).

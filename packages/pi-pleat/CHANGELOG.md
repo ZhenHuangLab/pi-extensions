@@ -2,6 +2,12 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.4
+
+### Patch Changes
+
+- Move source and package metadata into the pi-extensions monorepo while retaining independent package versions and releases. Source behavior is unchanged.
+
 ## 0.1.3 (2026-10-15)
 
 - Publish to npm with installation instructions and version, download, and Git tag badges.

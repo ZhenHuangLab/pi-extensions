@@ -5,8 +5,8 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm version" src="https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search?color=cb3837&amp;logo=npm"></a>
   <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm monthly downloads" src="https://img.shields.io/npm/dm/%40zhenhuang%2Fpi-xai-search"></a>
-  <a href="https://github.com/ZhenHuangLab/pi-xai-search/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-xai-search"></a>
-  <a href="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-extensions/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=%40zhenhuang%2Fpi-xai-search%40*"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-extensions/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ZhenHuangLab/pi-extensions/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://nodejs.org/"><img alt="Node.js 22.19 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522.19-339933?logo=node.js&amp;logoColor=white"></a>
   <a href="https://github.com/earendil-works/pi-mono"><img alt="Pi 0.83.0 or newer" src="https://img.shields.io/badge/Pi-%E2%89%A50.83.0-7c3aed"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
@@ -60,17 +60,11 @@ Your main Pi session can keep using Claude, GPT, Gemini, or any other model. The
 pi install npm:@zhenhuang/pi-xai-search
 ```
 
-### GitHub
-
-```bash
-pi install git:github.com/ZhenHuangLab/pi-xai-search
-```
-
 ### Local development checkout
 
 ```bash
-git clone https://github.com/ZhenHuangLab/pi-xai-search.git
-pi install /absolute/path/to/pi-xai-search
+git clone https://github.com/ZhenHuangLab/pi-extensions.git
+pi install ./pi-extensions/packages/pi-xai-search
 ```
 
 Restart Pi or run `/reload` after installing the package into an existing session.
@@ -291,36 +285,31 @@ Yes. Pass up to 20 handles in either `allowed_x_handles` or `excluded_x_handles`
 ## Development
 
 ```bash
-git clone https://github.com/ZhenHuangLab/pi-xai-search.git
-cd pi-xai-search
-npm install
-npm run check
+git clone https://github.com/ZhenHuangLab/pi-extensions.git
+cd pi-extensions
+npm ci
+npm run check --workspace=@zhenhuang/pi-xai-search
+npm test --workspace=@zhenhuang/pi-xai-search
 ```
 
-Useful commands:
+Run workspace commands from the repository root:
 
-| Command             | Purpose                                    |
-| ------------------- | ------------------------------------------ |
-| `npm test`          | Run the Vitest suite                       |
-| `npm run typecheck` | Run strict TypeScript checks               |
-| `npm run lint`      | Run Oxlint                                 |
-| `npm run format`    | Format with Oxfmt                          |
-| `npm run check`     | Run formatting, lint, typecheck, and tests |
+| Command                                                  | Purpose                             |
+| -------------------------------------------------------- | ----------------------------------- |
+| `npm test --workspace=@zhenhuang/pi-xai-search`          | Run the Vitest suite                |
+| `npm run typecheck --workspace=@zhenhuang/pi-xai-search` | Run strict TypeScript checks        |
+| `npm run lint --workspace=@zhenhuang/pi-xai-search`      | Run Oxlint                          |
+| `npm run format --workspace=@zhenhuang/pi-xai-search`    | Format with Oxfmt                   |
+| `npm run check --workspace=@zhenhuang/pi-xai-search`     | Run formatting, lint, and typecheck |
+
+The `prepack` script runs both `check` and the Vitest suite before packaging.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security reports should follow [SECURITY.md](SECURITY.md).
 
 ## Maintainer releases
 
-For one-time setup, open the npm package's **Settings → Trusted Publisher → GitHub Actions**.
-Set owner to `ZhenHuangLab`, repository to `pi-xai-search`, and workflow
-filename to `publish.yml`. Leave environment blank. You must enable
-**Allow npm publish**; the default may allow only staging. Publishing uses OIDC
-without a stored npm token.
-
-Update the version in `package.json` and any tracked lockfile, then push the
-commit and matching `v<version>` tag. Publish a GitHub Release for that tag to
-run the workflow; pushing the tag alone does not trigger it. Prereleases publish
-to `next`; stable releases publish to `latest`. Do not move old tags.
+See [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)
+for versioning, package tags, and npm trusted publishing.
 
 ## License
 

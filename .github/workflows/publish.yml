@@ -1,0 +1,114 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      workspace: ${{ steps.release.outputs.workspace }}
+      dist_tag: ${{ steps.release.outputs.dist_tag }}
+    env:
+      PI_CONTEXT_LIVE: "0"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm 11
+        run: npm install --global npm@11 --ignore-scripts
+
+      - name: Validate release tag and select workspace
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { execFileSync } from "node:child_process";
+          import { appendFileSync } from "node:fs";
+
+          const workspaces = JSON.parse(execFileSync(
+            "npm",
+            ["pkg", "get", "name", "version", "--workspaces", "--json"],
+            { encoding: "utf8" },
+          ));
+          const releaseTag = process.env.RELEASE_TAG;
+          const matches = Object.values(workspaces).filter(
+            ({ name, version }) => `${name}@${version}` === releaseTag,
+          );
+          if (matches.length === 0) {
+            throw new Error(
+              `Release tag ${JSON.stringify(releaseTag)} does not match any workspace. Use <npm-package-name>@<package.json-version>.`,
+            );
+          }
+          if (matches.length > 1) {
+            throw new Error(
+              `Release tag ${JSON.stringify(releaseTag)} matches ${matches.length} workspaces; exactly one is required.`,
+            );
+          }
+
+          const [{ name, version }] = matches;
+          const distTag = process.env.RELEASE_PRERELEASE === "true" || version.split("+")[0].includes("-")
+            ? "next"
+            : "latest";
+          appendFileSync(process.env.GITHUB_OUTPUT, `workspace=${name}\ndist_tag=${distTag}\n`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check selected workspace
+        env:
+          NPM_WORKSPACE: ${{ steps.release.outputs.workspace }}
+        run: npm run check --workspace="$NPM_WORKSPACE"
+
+      - name: Run selected workspace tests
+        env:
+          NPM_WORKSPACE: ${{ steps.release.outputs.workspace }}
+        run: npm test --workspace="$NPM_WORKSPACE" --if-present
+
+      - name: Check package contents
+        env:
+          NPM_WORKSPACE: ${{ steps.release.outputs.workspace }}
+        run: npm pack --dry-run --ignore-scripts --workspace="$NPM_WORKSPACE"
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm 11
+        run: npm install --global npm@11 --ignore-scripts
+
+      - name: Publish selected workspace
+        env:
+          NPM_WORKSPACE: ${{ needs.validate.outputs.workspace }}
+          NPM_DIST_TAG: ${{ needs.validate.outputs.dist_tag }}
+        run: npm publish --workspace="$NPM_WORKSPACE" --ignore-scripts --access public --tag "$NPM_DIST_TAG"

@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/v/pi-pleat" alt="npm 版本"></a>
   <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/dm/pi-pleat" alt="npm 每月下载量"></a>
-  <a href="https://github.com/ZhenHuangLab/pi-pleat/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-pleat" alt="GitHub 标签"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-extensions/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-extensions?filter=pi-pleat%40*" alt="GitHub 标签"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="许可证：MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="已在 Pi 1.2.0 上测试">
 </p>
@@ -26,8 +26,8 @@ pi install npm:pi-pleat
 也可以从本地克隆安装：
 
 ```sh
-git clone https://github.com/ZhenHuangLab/pi-pleat
-pi install ./pi-pleat
+git clone https://github.com/ZhenHuangLab/pi-extensions.git
+pi install ./pi-extensions/packages/pi-pleat
 ```
 
 pi-pleat 基于 Pi 1.2.0 开发和测试，不需要任何设置。
@@ -128,30 +128,28 @@ pi-pleat 读取 Pi 的 `compaction` 设置。`reserveTokens` 和 `keepRecentToke
 
 ## 开发
 
-需要 Node.js 22.19.0 或更高版本。
+需要 Node.js 22.19.0 或更高版本。在仓库根目录运行：
 
 ```sh
 npm ci
-npm run check   # 类型检查，以及测试文件的语法检查
-npm test        # 本地测试；跳过真实接口检查
+npm run check --workspace=pi-pleat   # 类型检查，以及测试文件的语法检查
+npm test --workspace=pi-pleat        # 本地测试；跳过真实接口检查
 ```
 
 真实接口检查会发出实际请求，可能产生费用：
 
 ```sh
-npm run test:live
+npm run test:live --workspace=pi-pleat
 
 # 只运行 Anthropic 集成检查
-PI_CONTEXT_LIVE=1 node --test --test-name-pattern="live integrated Anthropic" test/live.test.mjs
+PI_CONTEXT_LIVE=1 npm exec --workspace=pi-pleat -- node --test --test-name-pattern="live integrated Anthropic" test/live.test.mjs
 ```
 
 它们使用你在 Pi 中为 `anthropic` 和 `openai-codex` 配置的凭据，并以只读方式打开凭据存储：需要刷新 OAuth 令牌的请求会直接失败，不会改动已保存的凭据。检查只发送合成内容。`test/live.test.mjs` 在 Pi 会话中运行 pi-pleat，使用 `claude-haiku-5-5` 和 `gpt-6-luna`；其中的 Codex 检查还用 `anthropic/claude-haiku-5-5` 写可读摘要。`test/native.test.mjs` 直接检查服务商协议，使用 `claude-sonnet-5-5` 和 `gpt-6-astra`。设置 `PI_CONTEXT_ANTHROPIC_MODEL` 和 `PI_CONTEXT_OPENAI_MODEL` 可以换用其他模型。
 
 ## 维护者发布
 
-自动发布前，需要在 npm 网站完成一次授权。在此包的 **Settings → Trusted Publisher → GitHub Actions** 中，将 owner 设为 `ZhenHuangLab`，repository 设为 `pi-pleat`，workflow filename 设为 `publish.yml`（只填文件名），environment 留空。启用 **Allow npm publish**，否则 npm 可能只允许暂存发布。工作流通过 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) 使用 OIDC，不需要保存 npm 令牌。
-
-更新 `package.json` 和已跟踪的 `package-lock.json` 中的版本，推送提交及匹配的 `v<version>` 标签，然后为该标签发布 GitHub Release。发布 GitHub Release 才会触发 npm 发布，单独推送标签不会触发。GitHub 预发布或带有 SemVer 预发布后缀的版本发布到 `next`，稳定版发布到 `latest`。
+版本管理、包标签和 npm Trusted Publisher 配置见 [RELEASING.md](https://github.com/ZhenHuangLab/pi-extensions/blob/main/RELEASING.md)。
 
 ## 许可证
 
