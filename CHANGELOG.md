@@ -2,7 +2,7 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.2 (2026-10-14)
 
 - Set per-model clearing values through `pi-pleat.clearing.modelOverrides["provider/modelId"]`, with
   each field falling back to `pi-pleat.clearing` and then its default.
