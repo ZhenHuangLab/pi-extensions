@@ -147,6 +147,12 @@ PI_CONTEXT_LIVE=1 node --test --test-name-pattern="live integrated Anthropic" te
 
 它们使用你在 Pi 中为 `anthropic` 和 `openai-codex` 配置的凭据，并以只读方式打开凭据存储：需要刷新 OAuth 令牌的请求会直接失败，不会改动已保存的凭据。检查只发送合成内容。`test/live.test.mjs` 在 Pi 会话中运行 pi-pleat，使用 `claude-haiku-5-5` 和 `gpt-6-luna`；其中的 Codex 检查还用 `anthropic/claude-haiku-5-5` 写可读摘要。`test/native.test.mjs` 直接检查服务商协议，使用 `claude-sonnet-5-5` 和 `gpt-6-astra`。设置 `PI_CONTEXT_ANTHROPIC_MODEL` 和 `PI_CONTEXT_OPENAI_MODEL` 可以换用其他模型。
 
+## 维护者发布
+
+自动发布前，需要在 npm 网站完成一次授权。在此包的 **Settings → Trusted Publisher → GitHub Actions** 中，将 owner 设为 `ZhenHuangLab`，repository 设为 `pi-pleat`，workflow filename 设为 `publish.yml`（只填文件名），environment 留空。启用 **Allow npm publish**，否则 npm 可能只允许暂存发布。工作流通过 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) 使用 OIDC，不需要保存 npm 令牌。
+
+更新 `package.json` 和已跟踪的 `package-lock.json` 中的版本，推送提交及匹配的 `v<version>` 标签，然后为该标签发布 GitHub Release。发布 GitHub Release 才会触发 npm 发布，单独推送标签不会触发。GitHub 预发布或带有 SemVer 预发布后缀的版本发布到 `next`，稳定版发布到 `latest`。
+
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
