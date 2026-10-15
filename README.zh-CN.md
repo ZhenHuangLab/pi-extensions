@@ -54,6 +54,12 @@ Keep responses brief.
 
 `/prompt-per-model` 列出所有文件，标出与当前模型匹配的文件，并指出无法使用的文件，例如 frontmatter 无效或没有正文的文件。页脚显示匹配的文件。
 
+## 维护者发布
+
+自动发布前，需要在 npm 网站完成一次授权。在此包的 **Settings → Trusted Publisher → GitHub Actions** 中，将 owner 设为 `ZhenHuangLab`，repository 设为 `prompt-per-model`，workflow filename 设为 `publish.yml`（只填文件名），environment 留空。启用 **Allow npm publish**，否则 npm 可能只允许暂存发布。工作流通过 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) 使用 OIDC，不需要保存 npm 令牌。
+
+更新 `package.json` 和已跟踪的 `package-lock.json` 中的版本，推送提交及匹配的 `v<version>` 标签，然后为该标签发布 GitHub Release。发布 GitHub Release 才会触发 npm 发布，单独推送标签不会触发。GitHub 预发布或带有 SemVer 预发布后缀的版本发布到 `next`，稳定版发布到 `latest`。
+
 ## 许可证
 
 MIT；见 [LICENSE](LICENSE)。
