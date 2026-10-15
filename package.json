@@ -1,17 +1,29 @@
 {
   "name": "pi-pleat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Context management for Pi: clears old tool output, recalls it on demand, and uses native compaction on Anthropic and OpenAI Responses models",
   "type": "module",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "license": "MIT",
-  "files": ["src", "README.md", "LICENSE"],
-  "pi": { "extensions": ["./src/index.ts"] },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZhenHuangLab/pi-pleat.git"
   },
-  "engines": { "node": ">=22.19.0" },
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "check": "tsc -p tsconfig.json && for file in test/*.mjs; do node --check \"$file\" || exit; done",
     "test": "node --test test/*.test.mjs",

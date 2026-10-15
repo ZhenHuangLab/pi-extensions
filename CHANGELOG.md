@@ -2,7 +2,7 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.1 (2026-10-14)
 
 - Configure clearing trigger and floor ratios, kept tool uses, and the minimum local result size
   through `pi-pleat.clearing` in Pi settings. Invalid values warn and use defaults.
