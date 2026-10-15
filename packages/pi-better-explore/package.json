@@ -1,0 +1,53 @@
+{
+  "name": "pi-better-explore",
+  "version": "0.3.0",
+  "description": "Tool-boundary enforcement for pi: routes codebase search to sift-light and bounded tools, blocks only large bash dumps, and keeps the prompt-cache prefix intact",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "search",
+    "grep",
+    "sift-light",
+    "explore",
+    "context"
+  ],
+  "homepage": "https://github.com/ZhenHuangLab/pi-better-explore#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/pi-better-explore/issues"
+  },
+  "license": "MIT",
+  "author": "ZhenHuangLab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/pi-better-explore.git"
+  },
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "typescript": "^7.0.2"
+  }
+}
