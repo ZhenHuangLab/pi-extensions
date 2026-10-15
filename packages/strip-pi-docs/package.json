@@ -1,0 +1,42 @@
+{
+  "name": "strip-pi-docs",
+  "version": "1.0.0",
+  "description": "Pi extension that strips the built-in Pi documentation pointer from the system prompt",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "system-prompt"
+  ],
+  "homepage": "https://github.com/ZhenHuangLab/strip-pi-docs#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/strip-pi-docs/issues"
+  },
+  "license": "MIT",
+  "author": "ZhenHuangLab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/strip-pi-docs.git"
+  },
+  "files": [
+    "index.ts",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.2.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
