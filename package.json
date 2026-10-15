@@ -32,7 +32,7 @@
     "@earendil-works/pi-coding-agent": ">=1.2.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.19.0"
   },
   "pi": {
     "extensions": [

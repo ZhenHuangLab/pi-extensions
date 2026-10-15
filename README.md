@@ -1,5 +1,10 @@
 # strip-pi-docs
 
+[![npm version](https://img.shields.io/npm/v/strip-pi-docs)](https://www.npmjs.com/package/strip-pi-docs)
+[![npm downloads per month](https://img.shields.io/npm/dm/strip-pi-docs)](https://www.npmjs.com/package/strip-pi-docs)
+[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/strip-pi-docs)](https://github.com/ZhenHuangLab/strip-pi-docs/tags)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 Pi extension that removes the built-in **Pi documentation** pointer from the system prompt.
 
 By default, every Pi session injects a block like:
@@ -17,14 +22,16 @@ That block is useful when hacking on Pi itself, but otherwise burns context ever
 ## Install
 
 ```bash
-pi install git:github.com/ZhenHuangLab/strip-pi-docs
+pi install npm:strip-pi-docs
 ```
 
 Or try without installing:
 
 ```bash
-pi -e git:github.com/ZhenHuangLab/strip-pi-docs
+pi -e npm:strip-pi-docs
 ```
+
+Requires Pi 1.2.0 or later and Node.js 22.19.0 or later.
 
 ## Usage
 
@@ -49,10 +56,9 @@ Slash command:
 ## How it works
 
 1. On `session_start`, the extension snapshots `enabled` from the config file.
-2. On each `before_agent_start`, if enabled, it removes the Pi documentation block from `event.systemPrompt`.
-3. Also matches the Claude Code-rewritten form (`Claude Code documentation…`) used by some Anthropic OAuth extensions.
+2. On each `before_agent_start`, if enabled, it replaces `event.systemPromptOptions.sections.docs` with a newline. Pi rebuilds the system prompt with an empty documentation section.
 
-Custom `--system-prompt` / `SYSTEM.md` prompts never include the default docs block, so there is nothing to strip in that case.
+Forced system prompts are left unchanged. Custom prompts without a documentation section are also left unchanged.
 
 ## Config
 
