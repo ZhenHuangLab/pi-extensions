@@ -1,0 +1,42 @@
+{
+  "name": "prompt-per-model",
+  "version": "0.1.0",
+  "description": "Per-model system prompts for Pi: adds the Markdown files that match the current model to the system prompt",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "system-prompt"
+  ],
+  "license": "MIT",
+  "author": "ZhenHuangLab",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/prompt-per-model.git"
+  },
+  "homepage": "https://github.com/ZhenHuangLab/prompt-per-model#readme",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@types/node": "22.20.5",
+    "typescript": "6.0.3"
+  }
+}
