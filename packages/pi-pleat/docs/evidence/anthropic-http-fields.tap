@@ -1,0 +1,22 @@
+TAP version 13
+# Subtest: live Anthropic: two signed compactions and strict preserved-thinking replay
+ok 1 - live Anthropic: two signed compactions and strict preserved-thinking replay
+  ---
+  duration_ms: 68139.805917
+  type: 'test'
+  ...
+# {"step":"anthropic-baseline-observation","model":"claude-sonnet-5-5","status":200,"rawBlockTypes":["thinking","text"],"contentTypes":["thinking","text"],"thinking":{"type":"adaptive","display":"summarized","block_binding":{"prefix_mismatch_behavior":"error"}},"usage":{"input":229,"output":1247,"cacheRead":0,"cacheWrite":0,"totalTokens":1476,"cost":{"input":0.00045799999999999997,"output":0.01247,"cacheRead":0,"cacheWrite":0,"total":0.012928},"cacheWrite1h":0,"reasoning":653}}
+# {"step":"anthropic-baseline","model":"claude-sonnet-5-5","status":200,"signedThinking":true,"usage":{"input":229,"output":1247,"cacheRead":0,"cacheWrite":0,"totalTokens":1476,"cost":{"input":0.00045799999999999997,"output":0.01247,"cacheRead":0,"cacheWrite":0,"total":0.012928},"cacheWrite1h":0,"reasoning":653}}
+# {"step":"anthropic-compact-1","status":200,"rawStop":"compaction","blockCount":1,"normalizedStop":"error","adapterError":"Unhandled stop reason: compaction","rawUsage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"iterations":[{"input_tokens":287,"output_tokens":1744,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"compaction"}]}}
+# {"step":"anthropic-replay-1","status":200,"identifierRecoveredFromWindow":true,"reportedTransformations":0,"strictBindingOnWire":"error","signedThinkingReplayed":1,"usage":{"input":2096,"output":1871,"cacheRead":0,"cacheWrite":0,"totalTokens":3967,"cost":{"input":0.0041919999999999995,"output":0.01871,"cacheRead":0,"cacheWrite":0,"total":0.022902},"cacheWrite1h":0,"reasoning":1162}}
+# {"step":"anthropic-compact-2","status":200,"rawStop":"compaction","blockCount":1,"normalizedStop":"error","adapterError":"Unhandled stop reason: compaction","rawUsage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"iterations":[{"input_tokens":2154,"output_tokens":1891,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":0},"type":"compaction"}]}}
+# {"step":"anthropic-replay-2","status":200,"identifierRecoveredFromWindow":true,"reportedTransformations":0,"strictBindingOnWire":"error","signedThinkingReplayed":1,"usage":{"input":3041,"output":2271,"cacheRead":0,"cacheWrite":0,"totalTokens":5312,"cost":{"input":0.006082,"output":0.02271,"cacheRead":0,"cacheWrite":0,"total":0.028792},"cacheWrite1h":0,"reasoning":1630}}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 68744.161833

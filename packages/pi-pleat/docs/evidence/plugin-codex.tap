@@ -1,0 +1,25 @@
+TAP version 13
+# Subtest: live integrated OpenAI Codex: threshold trigger, readable summary, retained suffix, and restart
+ok 1 - live integrated OpenAI Codex: threshold trigger, readable summary, retained suffix, and restart
+  ---
+  duration_ms: 11831.779708
+  type: 'test'
+  ...
+# {"step":"response","stopReason":"toolUse","usage":{"input":251,"output":18,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":269,"cost":{"input":0.000025100000000000004,"output":0.000009,"cacheRead":0,"cacheWrite":0,"total":0.0000341}},"contentTypes":["toolCall"],"signedThinking":false,"diagnostics":[]}
+# {"step":"response","stopReason":"toolUse","usage":{"input":1647,"output":18,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":1665,"cost":{"input":0.00016470000000000002,"output":0.000009,"cacheRead":0,"cacheWrite":0,"total":0.00017370000000000002}},"contentTypes":["toolCall"],"signedThinking":false,"diagnostics":[]}
+# {"step":"compaction","strategy":"responses-trigger","aborted":false}
+# {"step":"response","stopReason":"toolUse","usage":{"input":1786,"output":18,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":1804,"cost":{"input":0.0001786,"output":0.000009,"cacheRead":0,"cacheWrite":0,"total":0.0001876}},"contentTypes":["toolCall"],"signedThinking":false,"diagnostics":[]}
+# {"step":"compaction","strategy":"responses-trigger","aborted":false}
+# {"step":"response","stopReason":"stop","usage":{"input":1743,"output":45,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":1788,"cost":{"input":0.0001743,"output":0.000022499999999999998,"cacheRead":0,"cacheWrite":0,"total":0.0001968}},"contentTypes":["text"],"signedThinking":false,"diagnostics":[]}
+# {"step":"codex-task","requests":4,"compactions":2,"strategies":["responses-trigger","responses-trigger"],"windowTypes":[["message","compaction"],["message","compaction"]]}
+# {"step":"response","stopReason":"stop","usage":{"input":265,"output":28,"cacheRead":1536,"cacheWrite":0,"reasoning":0,"totalTokens":1829,"cost":{"input":0.000026500000000000004,"output":0.000014,"cacheRead":0.000015360000000000002,"cacheWrite":0,"total":0.000055860000000000004}},"contentTypes":["text"],"signedThinking":false,"diagnostics":[]}
+# {"step":"codex-restart","requests":1,"stopReason":"stop","usage":{"input":265,"output":28,"cacheRead":1536,"cacheWrite":0,"reasoning":0,"totalTokens":1829,"cost":{"input":0.000026500000000000004,"output":0.000014,"cacheRead":0.000015360000000000002,"cacheWrite":0,"total":0.000055860000000000004}},"windowTypes":["message","compaction"],"replayChecks":2}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15311.477541

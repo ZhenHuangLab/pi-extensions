@@ -1,0 +1,346 @@
+import { setTimeout as sleep } from "node:timers/promises";
+import { buildSessionProjection, convertToLlm, estimateTokens } from "@earendil-works/pi-coding-agent";
+import type { CustomEntryDraft, ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { clampThinkingLevel, getCurrentSystemMessage } from "@earendil-works/pi-ai";
+import type { Usage } from "@earendil-works/pi-ai";
+import { CONTEXT_SAFETY_TOKENS } from "./budget.ts";
+import type { Limits, SessionStats } from "./budget.ts";
+import { combineUsage, prepareFromBranch, resolveSummarizer, summarize } from "./fallback.ts";
+import type { CompactionPreparation, Summarizer } from "./fallback.ts";
+import { compactionPayload, isAnthropic, keptIdentity, requestCompaction } from "./providers/anthropic.ts";
+import { isResponsesTrigger, requestTriggerCompaction } from "./providers/openai.ts";
+import type { ResponsesOutcome } from "./providers/openai.ts";
+import { applyReplay } from "./requests.ts";
+import type { Requests } from "./requests.ts";
+import {
+  CAPABILITY_ENTRY, canonicalJson, channelKey, channelOf, coverage, isPhysicalModel,
+  readCapabilities, sameChannel, sha256,
+} from "./session.ts";
+import type { CapabilityRecord, Feature, PleatDetails } from "./session.ts";
+
+export type Trigger = "turn_end" | "manual" | "threshold" | "overflow";
+export type CompactionDecision =
+  | {
+    kind: "result";
+    summary: string;
+    firstKeptEntryId: string;
+    details: PleatDetails;
+    usage?: Usage;
+    customEntries: CustomEntryDraft[];
+  }
+  | { kind: "pi-default"; reason: string }
+  | { kind: "skip"; reason: string; customEntries?: CustomEntryDraft[] };
+interface CompactArgs {
+  pi: ExtensionAPI;
+  ctx: ExtensionContext;
+  trigger: Trigger;
+  signal: AbortSignal;
+  preparation?: CompactionPreparation;
+  customInstructions?: string;
+  stats: SessionStats;
+  limits: Limits;
+}
+
+export function createCompactor(requests: Requests, diagnostic: (message: string) => void) {
+  let inFlight: Promise<CompactionDecision> | undefined;
+  let state: "idle" | "preparing" | "requesting" | "validating" = "idle";
+  type Start = { sessionId: string; leafId: string | null; key: string };
+  async function run(args: CompactArgs, start: Start): Promise<CompactionDecision> {
+    const { pi, ctx, trigger, signal, stats, limits } = args;
+    const model = ctx.model;
+    if (!isPhysicalModel(model)) return { kind: "skip", reason: "state changed" };
+    const unchanged = () => !signal.aborted && ctx.sessionManager.getSessionId() === start.sessionId &&
+      ctx.sessionManager.getLeafId() === start.leafId && isPhysicalModel(ctx.model) &&
+      channelKey(channelOf(ctx.model)) === start.key;
+    const changed = (): CompactionDecision => ({ kind: "skip", reason: "state changed" });
+    if (!unchanged()) return changed();
+    const branch = ctx.sessionManager.getBranch();
+    const settings = { ...pi.getSettings() };
+    const customEntries: CustomEntryDraft[] = [];
+    const capabilities = readCapabilities(branch);
+    const feature: Feature = isAnthropic(model) ? "anthropic-compaction" : "responses-trigger";
+    const featureKey = `${start.key}#${feature}`;
+    function capability(status: CapabilityRecord["status"], reason: string): void {
+      if (status === "supported" && capabilities.has(featureKey)) return;
+      customEntries.push({
+        type: "custom", customType: CAPABILITY_ENTRY,
+        data: { key: start.key, feature, status, reason } satisfies CapabilityRecord,
+      });
+    }
+    function finish(decision: CompactionDecision): CompactionDecision {
+      state = "validating";
+      if (!unchanged()) return changed();
+      if (decision.kind === "result") {
+        const projection = buildSessionProjection(branch);
+        const system = getCurrentSystemMessage(projection.messages);
+        const firstKeptEntryId = decision.firstKeptEntryId;
+        const cut = projection.entries.findIndex((entry) => entry.sourceEntry.id === firstKeptEntryId);
+        if (cut < 0) return { kind: "skip", reason: "compaction coverage unavailable" };
+        const native = decision.details.native;
+        const replacement = native?.kind === "responses-trigger"
+          ? JSON.stringify(native.window).length / 4
+          : (native?.kind === "anthropic" ? native.block.content as string : decision.summary).length / 4;
+        const kept = projection.entries.slice(cut).flatMap((entry) => entry.messages)
+          .filter((message) => message.role !== "system")
+          .reduce((sum, message) => sum + estimateTokens(message), 0);
+        const estimate = (system ? estimateTokens(system) : 0) + Math.ceil(replacement) + kept;
+        if (estimate + CONTEXT_SAFETY_TOKENS > ctx.model!.contextWindow) {
+          return { kind: "skip", reason: "compacted context does not fit the window" };
+        }
+      }
+      if (trigger !== "turn_end") {
+        for (const entry of customEntries) pi.appendEntry(entry.customType, entry.data);
+      } else if (decision.kind === "result" || decision.kind === "skip") {
+        decision = { ...decision, customEntries };
+      }
+      return decision;
+    }
+    let reason = isAnthropic(model)
+      ? "native compaction unavailable" : "native compaction is not available on this channel";
+    if (isAnthropic(model) && capabilities.get(featureKey)?.status !== "unsupported") {
+      const bound = requests.boundary(branch, model);
+      const projection = buildSessionProjection(branch);
+      const boundaryIndex = bound
+        ? projection.entries.findIndex((entry) => entry.sourceEntry.id === bound.assistantEntryId) : -1;
+      const assistant = boundaryIndex < 0 ? undefined
+        : projection.entries[boundaryIndex].messages.find((message) => message.role === "assistant");
+      const covered = bound && coverage(branch, bound.assistantEntryId);
+      const calls = assistant?.role === "assistant"
+        ? assistant.content.flatMap((block) => block.type === "toolCall" ? [block.id] : []) : [];
+      const results = new Set(projection.entries.slice(boundaryIndex + 1).flatMap((entry) =>
+        entry.messages.flatMap((message) => message.role === "toolResult" ? [message.toolCallId] : [])));
+      const keptTokens = projection.entries.slice(boundaryIndex).flatMap((entry) => entry.messages)
+        .reduce((sum, message) => sum + estimateTokens(message), 0);
+      const maxTokens = bound?.snapshot.payload.max_tokens;
+      if (!bound || assistant?.role !== "assistant" || !covered) reason = "request boundary unavailable";
+      else if (!calls.every((id) => results.has(id))) reason = "tool results incomplete";
+      else if (projection.messages.filter((message) => message.role === "system").length !== 1) {
+        reason = "system-changed";
+      } else if (keptTokens > limits.threshold) {
+        return finish({ kind: "skip", reason: "kept suffix exceeds threshold" });
+      }
+      // Pi clamps the real request's max_tokens to its remaining window. The
+      // native request reuses that allowance, independently of the trigger reserve.
+      else if (typeof maxTokens !== "number" || !Number.isSafeInteger(maxTokens) || maxTokens < 4096) {
+        reason = "native compaction requires max_tokens >= 4096";
+      } else {
+        const payload = compactionPayload(bound.snapshot.payload, args.customInstructions);
+        state = "requesting";
+        for (let attempt = 0; ; attempt++) {
+          if (!unchanged()) return changed();
+          const outcome = await requestCompaction({ ctx, model, payload, signal });
+          state = "validating";
+          if (!unchanged()) return changed();
+          if (outcome.ok) {
+            const identity = keptIdentity(assistant);
+            capability("supported", "A complete native compaction response was verified.");
+            return finish({
+              kind: "result", summary: outcome.block.content as string, firstKeptEntryId: bound.assistantEntryId,
+              details: {
+                plugin: "pi-pleat", version: 1, strategy: "anthropic", ...channelOf(model), ...covered,
+                firstKeptEntryId: bound.assistantEntryId, ...(outcome.usage ? {} : { usageComplete: false }),
+                native: {
+                  kind: "anthropic", block: outcome.block,
+                  systemHash: sha256(canonicalJson(bound.snapshot.payload.system ?? null)),
+                  toolsHash: sha256(canonicalJson(bound.snapshot.payload.tools ?? null)),
+                  keptSignatures: identity.signatures, keptToolUseIds: identity.toolUseIds,
+                },
+              },
+              usage: outcome.usage, customEntries,
+            });
+          }
+          stats.nativeFailures++;
+          if (outcome.kind === "cancelled") return changed();
+          if (outcome.kind === "invalid") {
+            return finish({
+              kind: "skip", reason: "native compaction failed: invalid response or request (integrity or authorization)",
+            });
+          }
+          if (outcome.kind === "transient" && attempt < 3) {
+            diagnostic("Native compaction request failed temporarily; retrying.");
+            try {
+              await sleep(Math.min(30000, outcome.retryAfter ?? 1000 * 2 ** attempt), undefined, { signal });
+            } catch { return changed(); }
+            state = "requesting";
+            continue;
+          }
+          reason = `native compaction ${outcome.kind}`;
+          if (outcome.kind === "unsupported") capability("unsupported", "The provider does not support native compaction.");
+          break;
+        }
+      }
+    } else if (isAnthropic(model)) reason = "native compaction unsupported";
+    if (!unchanged()) return changed();
+    let resolved = resolveSummarizer(pi, ctx);
+    if ("error" in resolved) {
+      diagnostic(resolved.error);
+      resolved = sessionSummarizer(pi, ctx);
+    }
+    if ("error" in resolved) return finish({ kind: "skip", reason: resolved.error });
+    let summarizer = resolved;
+    if (isResponsesTrigger(model)) {
+      if (capabilities.get(featureKey)?.status === "unsupported") reason = "native compaction unsupported";
+      else if (args.customInstructions?.trim()) reason = "custom-instructions";
+      else if (trigger !== "turn_end" && args.preparation) {
+        const preparation = args.preparation;
+        const projection = buildSessionProjection(branch);
+        const cut = projection.entries.findIndex((entry) => entry.sourceEntry.id === preparation.firstKeptEntryId);
+        const covered = coverage(branch, preparation.firstKeptEntryId);
+        if (cut < 0 || !covered) return finish({ kind: "skip", reason: "native compaction coverage unavailable" });
+        const prefixMessages = convertToLlm(projection.entries.slice(0, cut).flatMap((entry) => entry.messages));
+        const native = async (): Promise<ResponsesOutcome> => {
+          for (let attempt = 0; ; attempt++) {
+            if (!unchanged()) return { ok: false, kind: "cancelled" };
+            const outcome = await requestTriggerCompaction({
+              ctx, model, prefixMessages, thinkingLevel: pi.getThinkingLevel(), signal,
+              splice(payload) {
+                if (!unchanged()) throw new Error("state changed");
+                const replay = applyReplay(payload, model, branch);
+                if (replay.state === "rejected") throw new Error("Native replay rejected.");
+                return replay.payload;
+              },
+            });
+            if (!unchanged()) return { ok: false, kind: "cancelled" };
+            if (outcome.ok) return outcome;
+            stats.nativeFailures++;
+            if (outcome.kind !== "transient" || attempt >= 3) return outcome;
+            diagnostic("Native compaction request failed temporarily; retrying.");
+            try {
+              await sleep(Math.min(30000, outcome.retryAfter ?? 1000 * 2 ** attempt), undefined, { signal });
+            } catch { return { ok: false, kind: "cancelled" }; }
+          }
+        };
+        const readable = (selected: Summarizer) => summarize({
+          ctx, preparation, summarizer: selected, signal, settings,
+          checkState: () => { if (!unchanged()) throw new Error("state changed"); },
+        });
+        state = "requesting";
+        const [outcome, initial] = await Promise.all([
+          native(), readable(summarizer).then((summary) => ({ summary }), () => ({ summary: undefined })),
+        ]);
+        if (!unchanged() || !outcome.ok && outcome.kind === "cancelled") return changed();
+        if (!outcome.ok && outcome.kind === "invalid") {
+          return finish({
+            kind: "skip", reason: "native compaction failed: invalid response or request (integrity or authorization)",
+          });
+        }
+        if (!outcome.ok && outcome.kind === "unsupported") {
+          capability("unsupported", "The provider does not support Responses trigger compaction.");
+        }
+        let summary = initial.summary;
+        if (!summary && summarizer.configured && !sameChannel(channelOf(summarizer.model), channelOf(model))) {
+          diagnostic("Configured readable summary failed; retrying with the session model.");
+          const session = sessionSummarizer(pi, ctx);
+          if (!("error" in session)) {
+            summarizer = session;
+            try { summary = await readable(summarizer); } catch { /* Both failures preserve the history. */ }
+          }
+        }
+        if (!unchanged()) return changed();
+        if (!summary) return finish({ kind: "skip", reason: "readable summary failed" });
+        if (outcome.ok) {
+          capability("supported", "A complete Responses trigger compaction response was verified.");
+          const usageComplete = !!outcome.usage && !!summary.usage && summary.usageComplete !== false;
+          return finish({
+            kind: "result", summary: summary.summary, firstKeptEntryId: preparation.firstKeptEntryId,
+            details: {
+              plugin: "pi-pleat", version: 1, strategy: "responses-trigger", ...channelOf(model), ...covered,
+              firstKeptEntryId: preparation.firstKeptEntryId, ...(usageComplete ? {} : { usageComplete: false }),
+              native: { kind: "responses-trigger", window: outcome.window },
+            },
+            usage: combineUsage(outcome.usage, summary.usage), customEntries,
+          });
+        }
+        stats.fallbacks++;
+        reason = `native compaction ${outcome.kind}`;
+        return finish({
+          kind: "result", summary: summary.summary, firstKeptEntryId: preparation.firstKeptEntryId,
+          details: {
+            plugin: "pi-pleat", version: 1, strategy: "pi-summary", ...channelOf(summarizer.model), ...covered,
+            firstKeptEntryId: preparation.firstKeptEntryId, reason, usageComplete: summary.usageComplete,
+            readFiles: summary.readFiles, modifiedFiles: summary.modifiedFiles,
+          },
+          usage: summary.usage, customEntries,
+        });
+      }
+    }
+    if (trigger !== "turn_end" && !summarizer.configured) return finish({ kind: "pi-default", reason });
+    const preparation = args.preparation ?? prepareFromBranch(branch, limits);
+    if (!preparation) return finish({ kind: "skip", reason: `${reason}; nothing to summarize` });
+    async function readable(selected: Summarizer) {
+      return summarize({
+        ctx, preparation: preparation!, summarizer: selected, customInstructions: args.customInstructions,
+        signal, settings, checkState: () => { if (!unchanged()) throw new Error("state changed"); },
+      });
+    }
+    state = "requesting";
+    try {
+      let summary;
+      try { summary = await readable(summarizer); }
+      catch {
+        if (!unchanged()) return changed();
+        const session = sessionSummarizer(pi, ctx);
+        if ("error" in session || sameChannel(channelOf(summarizer.model), channelOf(model))) {
+          return finish({ kind: "skip", reason: `${reason}; fallback summary failed` });
+        }
+        if (trigger !== "turn_end") {
+          return finish({ kind: "pi-default", reason: `${reason}; configured fallback summary failed` });
+        }
+        summarizer = session;
+        summary = await readable(summarizer);
+      }
+      if (!unchanged()) return changed();
+      const covered = coverage(branch, preparation.firstKeptEntryId);
+      if (!covered) return finish({ kind: "skip", reason: "fallback coverage unavailable" });
+      stats.fallbacks++;
+      return finish({
+        kind: "result", summary: summary.summary, firstKeptEntryId: preparation.firstKeptEntryId,
+        details: {
+          plugin: "pi-pleat", version: 1, strategy: "pi-summary", ...channelOf(summarizer.model), ...covered,
+          firstKeptEntryId: preparation.firstKeptEntryId, reason, usageComplete: summary.usageComplete,
+          readFiles: summary.readFiles, modifiedFiles: summary.modifiedFiles,
+        },
+        usage: summary.usage, customEntries,
+      });
+    } catch {
+      return unchanged() ? finish({ kind: "skip", reason: `${reason}; fallback summary failed` }) : changed();
+    }
+  }
+  return {
+    get state() { return state; },
+    async compactNow(args: CompactArgs): Promise<CompactionDecision> {
+      const model = args.ctx.model;
+      if (!isPhysicalModel(model)) return { kind: "skip", reason: "no physical model selected" };
+      const start = {
+        sessionId: args.ctx.sessionManager.getSessionId(), leafId: args.ctx.sessionManager.getLeafId(),
+        key: channelKey(channelOf(model)),
+      };
+      const previous = inFlight;
+      let resolve!: (decision: CompactionDecision) => void;
+      const current = new Promise<CompactionDecision>((done) => { resolve = done; });
+      inFlight = current;
+      await previous;
+      state = "preparing";
+      args.ctx.ui.setStatus("pi-pleat", "compacting…");
+      let decision: CompactionDecision;
+      try { decision = await run(args, start); }
+      catch {
+        decision = { kind: "skip", reason: args.signal.aborted ? "state changed" : "compaction preparation failed" };
+      } finally {
+        state = "idle";
+        args.ctx.ui.setStatus("pi-pleat", undefined);
+      }
+      resolve(decision);
+      if (inFlight === current) inFlight = undefined;
+      return decision;
+    },
+  };
+}
+
+function sessionSummarizer(pi: ExtensionAPI, ctx: ExtensionContext): Summarizer | { error: string } {
+  if (!isPhysicalModel(ctx.model)) return { error: "No physical model selected." };
+  return {
+    model: ctx.model, thinkingLevel: clampThinkingLevel(ctx.model, pi.getThinkingLevel()),
+    label: "session model", configured: false,
+  };
+}

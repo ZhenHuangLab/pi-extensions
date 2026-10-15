@@ -1,0 +1,18 @@
+
+> pi-pleat@0.0.0 test
+> node --test test/lifecycle.test.mjs
+
+✔ ctx.compact at turn_end aborts without automatic model continuation (27.818875ms)
+✔ a turn_end compaction boundary replaces the prefix and preserves the tool pair (10.096ms)
+✔ direct registry calls require explicit provider callbacks (10.718833ms)
+✔ nested tool calls preserve programmatic values without transcript results (18.185875ms)
+✔ context edits remain branch-local and persist with opaque compaction details (8.737708ms)
+✔ rewritten tool results are persisted as the model-visible result (7.890542ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 676.869917

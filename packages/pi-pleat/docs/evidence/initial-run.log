@@ -1,0 +1,50 @@
+✔ ctx.compact at turn_end aborts without automatic model continuation (29.291542ms)
+✔ a turn_end compaction boundary preserves the tool pair and continues (22.452333ms)
+✔ direct registry calls require explicit provider callbacks (8.856ms)
+✖ live Anthropic: two signed compactions and strict preserved-thinking replay (2971.109166ms)
+✖ live OpenAI Codex: compact output is replayed intact across two compactions (2578.282042ms)
+ℹ {"step":"openai-baseline","model":"gpt-6-astra","status":200,"endpoint":"https://chatgpt.com/backend-api/codex","usage":{"input":87,"output":51,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":138,"cost":{"input":0.0008700000000000001,"output":0.00255,"cacheRead":0,"cacheWrite":0,"total":0.0034200000000000003}}}
+ℹ tests 5
+ℹ suites 0
+ℹ pass 3
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5974.790125
+
+✖ failing tests:
+
+test at native.test.mjs:90:1
+✖ live Anthropic: two signed compactions and strict preserved-thinking replay (2971.109166ms)
+  AssertionError [ERR_ASSERTION]: A successful request without signed thinking cannot validate preserved thinking
+      at TestContext.<anonymous> (file://<validation-dir>/native.test.mjs:138:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at native.test.mjs:213:1
+✖ live OpenAI Codex: compact output is replayed intact across two compactions (2578.282042ms)
+  Error: 404 {"detail":"Not Found"}
+      at APIError.generate (<pi-package-dir>/node_modules/openai/core/error.js:54:20)
+      at OpenAI.makeStatusError (<pi-package-dir>/node_modules/openai/client.js:430:32)
+      at OpenAI.makeRequest (<pi-package-dir>/node_modules/openai/client.js:922:30)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (file://<validation-dir>/native.test.mjs:281:23)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    status: 404,
+    headers: {},
+    requestID: null,
+    error: { detail: 'Not Found' },
+    code: undefined,
+    param: undefined,
+    type: undefined
+  }

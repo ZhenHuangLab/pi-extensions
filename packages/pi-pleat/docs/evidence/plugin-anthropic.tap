@@ -1,0 +1,23 @@
+TAP version 13
+# Subtest: live integrated Anthropic: automatic signed compactions, strict kept-thinking replay, and restart
+ok 1 - live integrated Anthropic: automatic signed compactions, strict kept-thinking replay, and restart
+  ---
+  duration_ms: 19144.973208
+  type: 'test'
+  ...
+# {"step":"response","stopReason":"toolUse","usage":{"input":4,"output":92,"cacheRead":0,"cacheWrite":838,"totalTokens":934,"cost":{"input":4.0000000000000003e-7,"output":0.000046,"cacheRead":0,"cacheWrite":0.00010475,"total":0.00015115000000000001},"cacheWrite1h":0,"reasoning":38},"contentTypes":["thinking","toolCall"],"signedThinking":true,"diagnostics":[]}
+# {"step":"response","stopReason":"toolUse","usage":{"input":2,"output":82,"cacheRead":686,"cacheWrite":4680,"totalTokens":5450,"cost":{"input":2.0000000000000002e-7,"output":0.000041,"cacheRead":0.00000686,"cacheWrite":0.000585,"total":0.00063306},"cacheWrite1h":0,"reasoning":15},"contentTypes":["thinking","text","toolCall"],"signedThinking":true,"diagnostics":[]}
+# {"step":"response","stopReason":"toolUse","usage":{"input":2,"output":83,"cacheRead":686,"cacheWrite":4742,"totalTokens":5513,"cost":{"input":2.0000000000000002e-7,"output":0.0000415,"cacheRead":0.00000686,"cacheWrite":0.00059275,"total":0.00064131},"cacheWrite1h":0,"reasoning":15},"contentTypes":["thinking","text","toolCall"],"signedThinking":true,"diagnostics":[]}
+# {"step":"response","stopReason":"stop","usage":{"input":2,"output":96,"cacheRead":686,"cacheWrite":4754,"totalTokens":5538,"cost":{"input":2.0000000000000002e-7,"output":0.000048,"cacheRead":0.00000686,"cacheWrite":0.00059425,"total":0.0006493100000000001},"cacheWrite1h":0,"reasoning":25},"contentTypes":["thinking","text"],"signedThinking":true,"diagnostics":[]}
+# {"step":"anthropic-task","requests":4,"compactions":4,"strategies":["anthropic","anthropic","anthropic","anthropic"],"lookups":3}
+# {"step":"response","stopReason":"stop","usage":{"input":4,"output":32,"cacheRead":686,"cacheWrite":756,"totalTokens":1478,"cost":{"input":4.0000000000000003e-7,"output":0.000016,"cacheRead":0.00000686,"cacheWrite":0.0000945,"total":0.00011776000000000001},"cacheWrite1h":0,"reasoning":0},"contentTypes":["text"],"signedThinking":false,"diagnostics":[]}
+# {"step":"anthropic-restart","requests":1,"stopReason":"stop","usage":{"input":4,"output":32,"cacheRead":686,"cacheWrite":756,"totalTokens":1478,"cost":{"input":4.0000000000000003e-7,"output":0.000016,"cacheRead":0.00000686,"cacheWrite":0.0000945,"total":0.00011776000000000001},"cacheWrite1h":0,"reasoning":0},"strictBinding":"error","replayChecks":4}
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19584.2545
