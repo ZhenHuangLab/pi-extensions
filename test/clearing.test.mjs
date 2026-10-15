@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildSessionProjection, estimateTokens, SessionManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { contentBytes, limitsFor, rawNextTokens } from "../src/budget.ts";
+import { contentBytes, DEFAULT_CLEARING, limitsFor, rawNextTokens, readClearingSettings } from "../src/budget.ts";
 import { placeholder, planClearing } from "../src/edits.ts";
 import { coverage, isClaudeThinking, toolRecords } from "../src/session.ts";
 import { appendTool, assistant, createHarness, testOptions, textReply, toolCall, usage } from "./harness.mjs";
@@ -18,17 +18,56 @@ const plan = (manager, override = {}) => planClearing({ branch: manager.getBranc
 
 test("budgets resolve independent per-model overrides and clamp small windows", testOptions, () => {
   const settings = { compaction: { reserveTokens: 500, keepRecentTokens: 100, modelOverrides: { "pleat-test/deterministic": { keepRecentTokens: 200 } } } };
-  assert.deepEqual(limitsFor(model, settings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 9750, clearFloor: 1950 });
+  assert.deepEqual(limitsFor(model, settings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 9750, clearFloor: 1950, keepToolUses: 8, minClearBytes: 1024 });
   const piSettings = SettingsManager.inMemory(settings).getCompactionSettings(model);
   assert.equal(piSettings.reserveTokens, limitsFor(model, settings).reserve);
   assert.equal(piSettings.keepRecentTokens, limitsFor(model, settings).keepRecent);
   assert.equal(limitsFor(model, {}).reserve, 16384);
   assert.equal(limitsFor(model, {}).keepRecent, 20000);
-  assert.deepEqual(limitsFor({ ...model, contextWindow: 100 }, { compaction: { enabled: false } }), { window: 100, reserve: 16384, keepRecent: 20000, enabled: false, threshold: 0, clearTrigger: 1, clearFloor: 1 });
+  assert.deepEqual(limitsFor({ ...model, contextWindow: 100 }, { compaction: { enabled: false } }), { window: 100, reserve: 16384, keepRecent: 20000, enabled: false, threshold: 0, clearTrigger: 1, clearFloor: 1, keepToolUses: 8, minClearBytes: 1024 });
   for (const invalid of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, "10", null]) {
     assert.equal(limitsFor(model, { compaction: { reserveTokens: 500, modelOverrides: { "pleat-test/deterministic": { reserveTokens: invalid } } } }).reserve, 500);
   }
   assert.equal(limitsFor(model, { compaction: { reserveTokens: 0, keepRecentTokens: 0 } }).keepRecent, 0);
+  assert.deepEqual(readClearingSettings({}), { clearing: DEFAULT_CLEARING, problems: [] });
+  const configured = { triggerRatio: 0.75, floorRatio: 0.25, keepToolUses: 3, minBytes: 2048 };
+  const configuredSettings = { ...settings, "pi-pleat": { clearing: configured } };
+  assert.deepEqual(readClearingSettings(configuredSettings), { clearing: configured, problems: [] });
+  assert.deepEqual(limitsFor(model, configuredSettings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 14625, clearFloor: 4875, keepToolUses: 3, minClearBytes: 2048 });
+  const boundary = { triggerRatio: 1, floorRatio: 0, keepToolUses: Number.MAX_SAFE_INTEGER, minBytes: 0 };
+  assert.deepEqual(readClearingSettings({ "pi-pleat": { clearing: boundary } }), { clearing: boundary, problems: [] });
+  assert.deepEqual(readClearingSettings({ "pi-pleat": { clearing: { minBytes: 0 } } }).clearing, { ...DEFAULT_CLEARING, minBytes: 0 });
+  for (const [field, invalids] of [
+    ["triggerRatio", [0, -0.1, 1.1]], ["floorRatio", [-0.1, 1]],
+    ["keepToolUses", [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]],
+    ["minBytes", [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]],
+  ]) {
+    for (const value of [...invalids, true, false, "1", null, NaN, Infinity, -Infinity]) {
+      const result = readClearingSettings({ "pi-pleat": { clearing: { [field]: value } } });
+      assert.deepEqual(result.clearing, DEFAULT_CLEARING);
+      assert.equal(result.problems.length, 1);
+      assert.ok(result.problems[0].startsWith("Invalid pi-pleat.clearing." + field + ":"));
+      assert.ok(result.problems[0].includes("Using the default " + DEFAULT_CLEARING[field] + "."));
+    }
+  }
+  for (const clearing of [{ triggerRatio: 0.05 }, { triggerRatio: 0.2, floorRatio: 0.2 }, { triggerRatio: 0.2, floorRatio: 0.3 }]) {
+    const result = readClearingSettings({ "pi-pleat": { clearing } });
+    assert.deepEqual(result.clearing, DEFAULT_CLEARING);
+    assert.equal(result.problems.length, 1);
+    assert.ok(result.problems[0].includes("default ratios (triggerRatio 0.5, floorRatio 0.1)"));
+  }
+  for (const value of [null, [], false, "invalid", 1]) {
+    for (const settings of [{ "pi-pleat": value }, { "pi-pleat": { clearing: value } }]) {
+      const result = readClearingSettings(settings);
+      assert.deepEqual(result.clearing, DEFAULT_CLEARING);
+      assert.equal(result.problems.length, 1);
+      assert.ok(result.problems[0].startsWith("Invalid pi-pleat"));
+      assert.ok(result.problems[0].includes("use an object. Using all clearing defaults."));
+    }
+  }
+  assert.deepEqual(readClearingSettings({ "pi-pleat": { clearing: { keepToolUse: 2 } } }), {
+    clearing: DEFAULT_CLEARING, problems: ["Unknown setting pi-pleat.clearing.keepToolUse ignored."],
+  });
   assert.equal(contentBytes([{ type: "text", text: "é" }, { type: "image", data: "aW1n", mimeType: "image/png" }]), 6);
 });
 
@@ -68,6 +107,9 @@ test("local clearing skips small, edited, omitted, and covered results and refus
   assert.deepEqual(plan(manager), []);
   const minimum = records([1024, ...Array(8).fill(100)]);
   assert.equal(plan(minimum.manager, { limits: { ...limits, clearFloor: 100 } }).length, 1);
+  const configured = records([700, 900, 5000]);
+  const configuredLimits = limitsFor(model, { compaction: { reserveTokens: 1000 }, "pi-pleat": { clearing: { floorRatio: 0, keepToolUses: 1, minBytes: 800 } } });
+  assert.deepEqual(plan(configured.manager, { limits: configuredLimits }).map((draft) => draft.targetId), [configured.saved[1].entryId]);
   const utf8 = records(Array(9).fill(100));
   const target = utf8.saved[0].entryId;
   utf8.manager.branch(utf8.saved[0].assistantId);

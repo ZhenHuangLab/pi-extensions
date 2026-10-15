@@ -53,6 +53,8 @@ test("Anthropic clearing is immutable, deduplicates betas, and omits thinking ed
   Object.freeze(original.thinking);
   Object.freeze(original);
   assert.deepEqual(withClearing(original, limits).context_management, clearing());
+  const configured = limitsFor({ contextWindow: 20000, provider: "anthropic", id: "claude-test" }, { "pi-pleat": { clearing: { keepToolUses: 3 } } });
+  assert.equal(withClearing(original, configured).context_management.edits.at(-1).keep.value, 3);
   assert.deepEqual(withClearing(original, limits).betas, ["existing", CONTEXT_MANAGEMENT_BETA]);
   assert.deepEqual(original, copy);
   for (const payload of [{ messages: [] }, { messages: [], thinking: { type: "disabled" } }]) {

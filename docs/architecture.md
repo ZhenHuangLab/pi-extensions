@@ -14,7 +14,7 @@ pi-pleat 管理当前会话的上下文大小和压缩过程。处理顺序是�
 
 首版使用 Pi 的会话树、压缩条目和 `context_edit`。模型只获得一个 `recall` 工具；
 用户通过 `/context` 查看状态，通过 `/context fallback` 为当前会话切换回退摘要模型。首版不加入
-跨会话记忆、数据库、语义索引、后台压缩或额外的阈值配置。
+跨会话记忆、数据库、语义索引或后台压缩。
 
 插件与其他修改历史或接管压缩的扩展互斥。只在首次发送前改写工具结果的扩展可以共存。
 Pi 1.2.0 把 `tool_result` 和 `message_end` 改写后的结果写入 JSONL，模型看到的也是这个版本
@@ -36,7 +36,7 @@ Pi 1.2.0 把 `tool_result` 和 `message_end` 改写后的结果写入 JSONL，�
 3. 用清理加召回释放空间。清理按简单、可预测的顺序进行，被清理的结果都可以召回；结果是否还有用，由模型在需要时通过召回判断（第 8 节）。
 4. thinking 最后才压缩。客户端从不删除 thinking，`clear_thinking_20251015` 使用 `keep: "all"`；达到压缩阈值后，才由原生压缩处理被摘要范围内的推理。
 5. 模型可见的内容尽量少，高效利用 token，遵循 SOTA 的 prompt engineering/context engineering 实践。模型只看到一个 `recall` 工具，插件不向系统提示添加内容；发给模型的文字固定，不含时间戳或计数器。状态和统计只在 `/context` 中给用户看。
-6. 轻量，开箱即用。阈值由模型窗口和 Pi 的 `compaction` 设置得出，清理参数是内部常数；可选设置只有回退摘要的模型和 thinking 级别，可以在对话中用 `/context fallback` 为当前会话切换。
+6. 轻量，开箱即用。阈值由模型窗口和 Pi 的 `compaction` 设置得出，清理参数使用默认值，也可通过 `pi-pleat.clearing` 设置；回退摘要的模型和 thinking 级别同样可选，可以在对话中用 `/context fallback` 为当前会话切换。
 7. 回退摘要可以使用指定模型。原生压缩始终使用会话模型，使保留轮次的 thinking 继续有效。
 
 保留 thinking 的依据来自模型厂商的测试。MiniMax 对 M2 的测试中，保留前几轮 thinking 后，
@@ -61,7 +61,7 @@ Anthropic 在多轮编程测试中发现，max 强度下每个会话丢弃一次
 | --- | --- | --- |
 | `src/index.ts` | 注册 `recall` 和 `/context`；接入 Pi 事件；装配模块；去重的提示和最近诊断 | 直接发送模型请求 |
 | `src/session.ts` | 通道标识；能力记录和回退覆盖条目；压缩 details 格式与校验；覆盖范围；工具结果记录 | 选择清理策略 |
-| `src/budget.ts` | 由模型窗口和 Pi `compaction` 设置计算阈值；清理常数和 4,096 安全 tokens；Anthropic 清理前大小；用量统计与保守的 applied_edits 归属 | 修改消息 |
+| `src/budget.ts` | 由模型窗口和 Pi `compaction` 设置计算阈值；清理设置校验和 4,096 安全 tokens；Anthropic 清理前大小；用量统计与保守的 applied_edits 归属 | 修改消息 |
 | `src/recall.ts` | 当前分支按 ID 或查询取回；超长结果写临时文件；检查输出文件引用 | 原位恢复历史、重跑命令 |
 | `src/edits.ts` | 非 Anthropic 通道的批量 `context_edit` 草案与占位文字 | 修改 JSONL 或 thinking |
 | `src/requests.ts` | 请求快照与回复条目的绑定；原生状态回放的校验与拼接 | 决定何时压缩 |
@@ -342,7 +342,7 @@ Anthropic 的 preserved thinking 规定，客户端清空或缩短已发送的 `
 
 所有服务商使用同一顺序：上下文超过清理触发点后，从最早的工具结果开始清理，保留最近 K 次
 工具调用，保留全部调用参数；一批达不到释放下限时不清理。K、触发点、释放下限和最小清理大小
-是内部常数，初值见第 9 节。
+可通过 `pi-pleat.clearing` 设置，默认值见第 9 节。
 
 Anthropic 由服务端执行这个规则。`clear_tool_uses_20250919` 的 `trigger`、`keep` 和
 `clear_at_least` 分别对应触发点、K 和释放下限，`clear_tool_inputs: false` 保留调用参数。
@@ -351,7 +351,7 @@ Anthropic 由服务端执行这个规则。`clear_tool_uses_20250919` 的 `trigg
 
 其他服务商由 pi-pleat 在 `turn_end` 追加一批 `context_edit`。上下文大小取 Pi 的
 `getContextUsage().tokens`，未知时不清理。候选是当前投影中的顶层工具结果，从旧到新排列，排除
-已被 `context_edit` 指向的条目、最近 8 次工具调用的结果、小于 1 KB 的结果（文字按 UTF-8 字节，
+已被 `context_edit` 指向的条目、最近 K 次工具调用的结果、小于最小清理大小（默认 1 KB）的结果（文字按 UTF-8 字节，
 图片按 base64 长度），以及分支上位于最后一个 Claude thinking assistant 之前的结果：修改它们会在
 切回 Claude 时使之后的 thinking 失效。替换小结果省不了多少空间，却让模型失去内容。按顺序累计
 节省的估算 tokens，达到释放下限即提交这一批；全部候选也达不到下限时不清理。
@@ -429,8 +429,12 @@ applied_edits 只在能确定属于该回复时才计入：同时打开的流、
 缺少服务端统计时 `/context` 标记“估算”，不能把缺失值当零。
 
 清理触发点 0.5T、释放下限 0.1T、保留最近 8 次工具调用（K）和最小清理大小 1 KB
-都是内部常数的初值，不开放为设置，由阶段 6 的对照结果确定。触发点和下限按 T 的比例计算，
-小窗口按比例缩小；候选合计达不到下限时不清理。清理减少输入内容，并不保证抵消缓存重写费用。
+是 `pi-pleat.clearing` 的默认值，由阶段 6 的对照结果评估和调整。`triggerRatio` 接受大于 0 且不超过 1
+的有限数，`floorRatio` 接受不小于 0 且小于 1 的有限数；两者按 T 的比例计算，四舍五入后最少为 1 token。
+`keepToolUses` 接受不小于 1 的安全整数；`minBytes` 接受不小于 0 的安全整数，只影响非 Anthropic 通道的
+本地清理，Anthropic 服务端不考虑大小。候选合计达不到下限时不清理。按 Anthropic 的
+[上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存
+重写越频繁。清理减少输入内容，并不保证抵消缓存重写费用。
 
 清理触发点不影响 thinking，对压缩时间的影响也很小。Anthropic 的压缩请求不能同时带
 `context_management`，要发送未清理的历史并装入窗口，所以 Anthropic 上的压缩时间只由完整
@@ -476,14 +480,17 @@ Anthropic 压缩用量读取 `usage.iterations` 中的 compaction 项，存入�
 插件提示 `Using a text summary: <原因>.`；交回 Pi 和跳过时也提示原因。每条提示在一个会话中只显示一次。
 所有允许的方法均失败时保持原历史并报告错误。
 
-可选设置只有 Pi 设置中 `pi-pleat` 键下的 `fallbackModel`（`provider/model`）和 `fallbackThinking`。
+可选设置位于 Pi 设置中 `pi-pleat` 键下：`fallbackModel`（`provider/model`）、`fallbackThinking` 和
+`clearing`。清理的四项均可省略；无效值通过会话内去重的警告说明使用默认值，并保留在 `/context` 的最近
+诊断中。逐项校验后，若有效的 `floorRatio >= triggerRatio`，两个比例都恢复默认值，只显示一条警告。
+`pi-pleat` 或 `pi-pleat.clearing` 不是对象时使用全部清理默认值并警告；`clearing` 中的未知键警告并忽略。
 回退摘要模型依次取当前分支最新的 `/context fallback` 会话覆盖、设置、会话模型。thinking 依次取覆盖或
 设置中的级别；都未设置时，指定的模型用 `off`，会话模型用会话的 thinking 级别；最后按模型能力限制。
 配置无效时记录诊断（`/context` 显示错误），改用会话模型。`/context fallback <provider/model> [level]`
 确认模型存在且为物理模型后写入会话覆盖；`/context fallback default` 清除覆盖。
 
 `/context` 显示：当前通道；有效用量、窗口与比例、估算标记、Anthropic 清理前大小、压缩阈值和清理
-触发点；清理状态（服务端已应用的次数和 tokens，或本地批次数和当前分支被清理的结果数）；当前分支
+触发点、释放下限和 K；清理状态（服务端已应用的次数和 tokens，或本地批次数和当前分支被清理的结果数）；当前分支
 各策略的压缩次数、压缩用量和费用（没有已知用量时显示 unknown，有条目缺少用量或用量不完整时标记
 partial）；原生回放状态或拒绝原因；当前通道的能力记录；召回次数；服务端报告的 thinking 丢弃次数和
 首个路径；回退摘要模型及其来源；最近诊断。`prefix_binding_mismatch` 是现象，不能直接归因于某个插件。

@@ -3,11 +3,53 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Api, AssistantMessage, ImageContent, Model, TextContent } from "@earendil-works/pi-ai";
 import { isRecord } from "./session.ts";
 
-export const CLEAR_TRIGGER_RATIO = 0.5;
-export const CLEAR_FLOOR_RATIO = 0.1;
-export const KEEP_TOOL_USES = 8;
-export const MIN_CLEAR_BYTES = 1024;
+export interface ClearingSettings {
+  triggerRatio: number;
+  floorRatio: number;
+  keepToolUses: number;
+  minBytes: number;
+}
+export const DEFAULT_CLEARING: Readonly<ClearingSettings> = Object.freeze({
+  triggerRatio: 0.5, floorRatio: 0.1, keepToolUses: 8, minBytes: 1024,
+});
 export const CONTEXT_SAFETY_TOKENS = 4096;
+
+export function readClearingSettings(settings: Record<string, unknown>): { clearing: ClearingSettings; problems: string[] } {
+  const clearing = { ...DEFAULT_CLEARING };
+  const problems: string[] = [];
+  const result = { clearing, problems };
+  if (!Object.hasOwn(settings, "pi-pleat")) return result;
+  const config = settings["pi-pleat"];
+  if (!isRecord(config)) {
+    problems.push("Invalid pi-pleat: use an object. Using all clearing defaults.");
+    return result;
+  }
+  if (!Object.hasOwn(config, "clearing")) return result;
+  const values = config.clearing;
+  if (!isRecord(values)) {
+    problems.push("Invalid pi-pleat.clearing: use an object. Using all clearing defaults.");
+    return result;
+  }
+  for (const key of Object.keys(values)) {
+    if (!Object.hasOwn(DEFAULT_CLEARING, key)) problems.push(`Unknown setting pi-pleat.clearing.${key} ignored.`);
+  }
+  const readNumber = (key: keyof ClearingSettings, valid: (value: number) => boolean, rule: string): void => {
+    if (!Object.hasOwn(values, key)) return;
+    const value = values[key];
+    if (typeof value === "number" && Number.isFinite(value) && valid(value)) clearing[key] = value;
+    else problems.push(`Invalid pi-pleat.clearing.${key}: ${rule}. Using the default ${DEFAULT_CLEARING[key]}.`);
+  };
+  readNumber("triggerRatio", (value) => value > 0 && value <= 1, "use a finite number greater than 0 and at most 1");
+  readNumber("floorRatio", (value) => value >= 0 && value < 1, "use a finite number at least 0 and less than 1");
+  readNumber("keepToolUses", (value) => Number.isSafeInteger(value) && value >= 1, "use a safe integer at least 1");
+  readNumber("minBytes", (value) => Number.isSafeInteger(value) && value >= 0, "use a safe integer at least 0");
+  if (clearing.floorRatio >= clearing.triggerRatio) {
+    clearing.triggerRatio = DEFAULT_CLEARING.triggerRatio;
+    clearing.floorRatio = DEFAULT_CLEARING.floorRatio;
+    problems.push(`Invalid pi-pleat.clearing.floorRatio: use a value less than pi-pleat.clearing.triggerRatio. Using the default ratios (triggerRatio ${DEFAULT_CLEARING.triggerRatio}, floorRatio ${DEFAULT_CLEARING.floorRatio}).`);
+  }
+  return result;
+}
 
 export interface Limits {
   window: number;
@@ -17,9 +59,12 @@ export interface Limits {
   threshold: number;
   clearTrigger: number;
   clearFloor: number;
+  keepToolUses: number;
+  minClearBytes: number;
 }
 
 export function limitsFor(model: Model<Api>, settings: Record<string, unknown>): Limits {
+  const clearing = readClearingSettings(settings).clearing;
   const compaction = isRecord(settings.compaction) ? settings.compaction : {};
   const overrides = isRecord(compaction.modelOverrides) ? compaction.modelOverrides : {};
   const value = overrides[`${model.provider}/${model.id}`];
@@ -35,8 +80,9 @@ export function limitsFor(model: Model<Api>, settings: Record<string, unknown>):
   return {
     window: model.contextWindow, reserve, keepRecent: tokens("keepRecentTokens", 20000),
     enabled: compaction.enabled !== false, threshold,
-    clearTrigger: Math.max(1, Math.round(CLEAR_TRIGGER_RATIO * threshold)),
-    clearFloor: Math.max(1, Math.round(CLEAR_FLOOR_RATIO * threshold)),
+    clearTrigger: Math.max(1, Math.round(clearing.triggerRatio * threshold)),
+    clearFloor: Math.max(1, Math.round(clearing.floorRatio * threshold)),
+    keepToolUses: clearing.keepToolUses, minClearBytes: clearing.minBytes,
   };
 }
 

@@ -1,7 +1,6 @@
 import { calculateCost } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Api, AssistantMessage, Model, Usage } from "@earendil-works/pi-ai";
-import { KEEP_TOOL_USES } from "../budget.ts";
 import type { Limits } from "../budget.ts";
 import { isRecord } from "../session.ts";
 import { captureResponse } from "./http.ts";
@@ -22,7 +21,7 @@ export function withClearing(payload: Record<string, unknown>, limits: Limits): 
   edits.push({
     type: "clear_tool_uses_20250919",
     trigger: { type: "input_tokens", value: limits.clearTrigger },
-    keep: { type: "tool_uses", value: KEEP_TOOL_USES },
+    keep: { type: "tool_uses", value: limits.keepToolUses },
     clear_at_least: { type: "input_tokens", value: limits.clearFloor },
     clear_tool_inputs: false,
   });

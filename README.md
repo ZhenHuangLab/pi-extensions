@@ -56,7 +56,7 @@ the encrypted item only to the same provider, API, endpoint and model, so it als
 summary with the fallback model at the same time. A user message with an image, or `/compact` with
 instructions, uses a text summary instead.
 
-Local clearing starts when the context is larger than half of the compaction threshold. It replaces
+By default, local clearing starts when the context is larger than half of the compaction threshold. It replaces
 the oldest tool results of 1 KB or more with a note such as
 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`, keeps the results of the last
 eight tool calls, and acts only when a batch frees at least a tenth of the threshold. Results that
@@ -106,17 +106,40 @@ pi-pleat reads Pi's `compaction` settings. The compaction threshold is the model
 minus `reserveTokens`, and `compaction.modelOverrides` applies per model. `compaction.enabled: false`
 turns off automatic compaction; clearing and `/compact` still work.
 
-Its only setting chooses the fallback model, under `pi-pleat` in Pi's `settings.json`
+Optional settings go under `pi-pleat` in Pi's `settings.json`
 (`~/.pi/agent/settings.json`, or `.pi/settings.json` in a trusted project):
 
 ```json
 {
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
-    "fallbackThinking": "off"
+    "fallbackThinking": "off",
+    "clearing": {
+      "triggerRatio": 0.5,
+      "floorRatio": 0.1,
+      "keepToolUses": 8,
+      "minBytes": 1024
+    }
   }
 }
 ```
+
+All four `clearing` fields are optional and use these defaults:
+
+| Field under `pi-pleat.clearing` | Default | Valid values | Purpose |
+|---|---|---|---|
+| `triggerRatio` | `0.5` | Finite number, `0 < x <= 1` | Start clearing above this fraction of T |
+| `floorRatio` | `0.1` | Finite number, `0 <= x < 1`, less than `triggerRatio` | Minimum tokens freed per batch, as a fraction of T |
+| `keepToolUses` | `8` | Safe integer, `x >= 1` | Keep the newest tool calls and their results |
+| `minBytes` | `1024` | Safe integer, `x >= 0` | Minimum result size for local clearing on non-Anthropic channels |
+
+Both ratios are fractions of the compaction threshold `T = contextWindow - reserveTokens`.
+The trigger and floor are rounded to tokens, with a minimum of 1. Anthropic ignores result size;
+`minBytes` only affects local clearing. Invalid values show a warning and use their defaults. If the
+effective `floorRatio >= triggerRatio`, both ratios use their defaults with one warning. A non-object
+`pi-pleat` or `pi-pleat.clearing` uses all clearing defaults with a warning; unknown clearing keys warn
+and are ignored. According to [Anthropic's context editing docs](https://platform.claude.com/docs/en/build-with-claude/context-editing),
+a lower floor clears more often and rewrites the prompt cache more often.
 
 The fallback model writes the text summaries and the readable summaries on the OpenAI channels.
 `fallbackThinking` defaults to `off` when a model is set. Without a fallback model, the session model

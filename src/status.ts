@@ -63,7 +63,7 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
     context += ` (${(100 * tokens / window).toFixed(1)}%)${raw?.estimated ? ", estimated" : ""}`;
   }
   if (model && isAnthropic(model)) context += ` · raw ${raw?.tokens ?? "unknown"} (Anthropic)`;
-  if (limits) context += ` · compaction at ${limits.threshold} · clearing from ${limits.clearTrigger}`;
+  if (limits) context += ` · compaction at ${limits.threshold} · clearing from ${limits.clearTrigger} (frees at least ${limits.clearFloor}, keeps ${limits.keepToolUses} tool uses)`;
   lines.push(context);
   const key = model ? channelKey(channelOf(model)) : undefined;
   const capabilities = [...readCapabilities(branch).values()].filter((record) => record.key === key);

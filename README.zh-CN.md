@@ -41,7 +41,7 @@ pi-pleat 基于 Pi 1.2.0 开发和测试，不需要任何设置。
 
 在 OpenAI 的两个通道上，压缩在 Pi 自己的阈值到达或运行 `/compact` 时开始。pi-pleat 把 Pi 切点之前的历史加上一个 `compaction_trigger` 项发出去，读取完整响应，保留纯文本的用户消息（最多 64,000 tokens）和压缩项。加密的压缩项只发给相同的服务商、API、端点和模型，所以 pi-pleat 同时用回退模型写一份可读摘要。用户消息含图片，或 `/compact` 带有说明时，改用文本摘要。
 
-上下文超过压缩阈值的一半时，本地清理开始。它把最旧的、不小于 1 KB 的工具结果换成占位文字，例如 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`；最近 8 次工具调用的结果保持不变；一批释放的空间达不到阈值的十分之一时不清理。分支上后面跟着 Claude thinking 的结果也不动，因为修改它们会使那些 thinking 失效。Anthropic 的服务端清理使用相同的触发点、相同的 8 次调用和相同的最小批量。
+默认情况下，上下文超过压缩阈值的一半时，本地清理开始。它把最旧的、不小于 1 KB 的工具结果换成占位文字，例如 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`；最近 8 次工具调用的结果保持不变；一批释放的空间达不到阈值的十分之一时不清理。分支上后面跟着 Claude thinking 的结果也不动，因为修改它们会使那些 thinking 失效。Anthropic 的服务端清理使用相同的触发点、相同的 8 次调用和相同的最小批量。
 
 原生压缩不可用、无法证明安全，或重试后仍然失败时，pi-pleat 写一份 Pi 格式的文本摘要，或者交给 Pi 照常压缩，并显示原因。文本摘要可能使保留的 Claude thinking 失效。遇到认证错误或不完整的响应时，跳过本次压缩，历史保持不变。压缩后的下一请求加上 4,096 tokens 的余量放不下模型窗口时，pi-pleat 也丢弃该结果并保留历史。
 
@@ -71,16 +71,33 @@ Pass `id` from a cleared-output note, or `query` (command, path, tool name, or t
 
 pi-pleat 读取 Pi 的 `compaction` 设置。压缩阈值等于模型的上下文窗口减去 `reserveTokens`，`compaction.modelOverrides` 按模型生效。`compaction.enabled: false` 关闭自动压缩；清理和 `/compact` 仍然可用。
 
-它自己只有一个设置，用来选择回退模型，写在 Pi 的 `settings.json`（`~/.pi/agent/settings.json`，或受信任项目中的 `.pi/settings.json`）的 `pi-pleat` 下：
+可选设置写在 Pi 的 `settings.json`（`~/.pi/agent/settings.json`，或受信任项目中的 `.pi/settings.json`）的 `pi-pleat` 下：
 
 ```json
 {
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
-    "fallbackThinking": "off"
+    "fallbackThinking": "off",
+    "clearing": {
+      "triggerRatio": 0.5,
+      "floorRatio": 0.1,
+      "keepToolUses": 8,
+      "minBytes": 1024
+    }
   }
 }
 ```
+
+`clearing` 的四项都可以省略，默认值如下：
+
+| `pi-pleat.clearing` 下的字段 | 默认值 | 有效范围 | 用途 |
+|---|---|---|---|
+| `triggerRatio` | `0.5` | 有限数，`0 < x <= 1` | 上下文超过 T 的这个比例时开始清理 |
+| `floorRatio` | `0.1` | 有限数，`0 <= x < 1`，且小于 `triggerRatio` | 一批至少释放 T 的这个比例 |
+| `keepToolUses` | `8` | 安全整数，`x >= 1` | 保留最近这些工具调用及其结果 |
+| `minBytes` | `1024` | 安全整数，`x >= 0` | 非 Anthropic 通道本地清理的最小结果字节数 |
+
+两个比例都以压缩阈值 `T = contextWindow - reserveTokens` 为基准，换算为 tokens 后四舍五入，最少为 1。`minBytes` 只影响非 Anthropic 通道的本地清理；Anthropic 服务端不考虑结果大小。无效值会显示警告并使用默认值。有效的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。`pi-pleat` 或 `pi-pleat.clearing` 不是对象时，警告并使用全部清理默认值；清理设置中的未知键会警告并忽略。按 [Anthropic 的上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存重写越频繁。
 
 回退模型负责写文本摘要，以及 OpenAI 通道上的可读摘要。设置了模型时，`fallbackThinking` 默认是 `off`。没有设置回退模型时，这些摘要由会话模型按会话的 thinking 级别来写；`/compact` 或 Pi 的阈值找不到可用的原生压缩时，由 Pi 自己压缩。原生压缩始终使用会话模型。
 

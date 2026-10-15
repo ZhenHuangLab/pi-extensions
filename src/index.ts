@@ -1,7 +1,8 @@
 import { getLatestCompactionEntry } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens } from "./budget.ts";
-import type { ResponseStats } from "./budget.ts";
+import type { Api, Model } from "@earendil-works/pi-ai";
+import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens, readClearingSettings } from "./budget.ts";
+import type { Limits, ResponseStats } from "./budget.ts";
 import { createCompactor } from "./compact.ts";
 import type { CompactionDecision } from "./compact.ts";
 import { planClearing } from "./edits.ts";
@@ -41,6 +42,11 @@ export default function piPleat(pi: ExtensionAPI): void {
     reported.add(message);
     ctx.ui.notify(message, "warning");
   }
+  function currentLimits(ctx: ExtensionContext, model: Model<Api>): Limits {
+    const settings = { ...pi.getSettings() };
+    for (const problem of readClearingSettings(settings).problems) notify(ctx, problem);
+    return limitsFor(model, settings);
+  }
   function report(ctx: ExtensionContext, decision: CompactionDecision): void {
     if (decision.kind === "skip") notify(ctx, `Compaction skipped: ${decision.reason}.`);
     else if (decision.kind === "pi-default") notify(ctx, `Using Pi compaction: ${decision.reason}.`);
@@ -69,7 +75,7 @@ export default function piPleat(pi: ExtensionAPI): void {
       const model = isPhysicalModel(ctx.model) ? ctx.model : undefined;
       const branch = ctx.sessionManager.getBranch();
       const currentReplay = model && replay?.entryId === getLatestCompactionEntry(branch)?.id && replay?.channel === channelKey(channelOf(model)) ? replay.result : undefined;
-      return formatContextStatus({ model, limits: model ? limitsFor(model, { ...pi.getSettings() }) : undefined,
+      return formatContextStatus({ model, limits: model ? currentLimits(ctx, model) : undefined,
         usage: ctx.getContextUsage(), raw: rawNextTokens(ctx, responses), branch, stats,
         summarizer: resolveSummarizer(pi, ctx), replay: currentReplay, diagnostics });
     }),
@@ -95,7 +101,7 @@ export default function piPleat(pi: ExtensionAPI): void {
       if (isAnthropic(model) && Array.isArray(result.messages) && !("compaction" in result) &&
           readCapabilities(branch).get(`${key}#clearing`)?.status !== "unsupported") {
         if ("context_management" in result) diagnostic("Existing context_management configuration kept.");
-        result = withClearing(result, limitsFor(model, { ...pi.getSettings() }));
+        result = withClearing(result, currentLimits(ctx, model));
         if (!warm) clearingRequestKey = key;
       } else if (!warm) clearingRequestKey = undefined;
       requests.record(result, channelOf(model));
@@ -137,7 +143,7 @@ export default function piPleat(pi: ExtensionAPI): void {
     if (failure) failure.entryId = event.messageEntryId;
     if (event.outcome !== "completed") return;
     const model = ctx.model!;
-    const limits = limitsFor(model, { ...pi.getSettings() });
+    const limits = currentLimits(ctx, model);
     if (isAnthropic(model)) {
       const raw = rawNextTokens(ctx, responses);
       if (!limits.enabled || !raw || raw.tokens <= limits.threshold || !ctx.signal) return;
@@ -160,7 +166,7 @@ export default function piPleat(pi: ExtensionAPI): void {
   pi.on("session_before_compact", async (event, ctx) => {
     if (!isPhysicalModel(ctx.model)) return;
     const decision = await coordinator.compactNow({ pi, ctx, trigger: event.reason, preparation: event.preparation,
-      signal: event.signal, customInstructions: event.customInstructions, stats, limits: limitsFor(ctx.model, { ...pi.getSettings() }) });
+      signal: event.signal, customInstructions: event.customInstructions, stats, limits: currentLimits(ctx, ctx.model) });
     report(ctx, decision);
     if (decision.kind === "result") return { compaction: { summary: decision.summary, firstKeptEntryId: decision.firstKeptEntryId,
       tokensBefore: event.preparation.tokensBefore, details: decision.details, usage: decision.usage } };

@@ -71,7 +71,7 @@ test("context status formats branch counts, compaction usage, capabilities, reca
   const result = format(manager, { stats, diagnostics: ["one", "two", "three", "four", "five", "six"] });
   assert.equal(result, [
     "pi-pleat · anthropic/claude-test (anthropic-messages)",
-    "Context: 1000 of 20000 tokens (5.0%) · raw 1777 (Anthropic) · compaction at 19000 · clearing from 9500",
+    "Context: 1000 of 20000 tokens (5.0%) · raw 1777 (Anthropic) · compaction at 19000 · clearing from 9500 (frees at least 1900, keeps 8 tool uses)",
     "Clearing: server-side, 2 applied, 777 tokens this session",
     "Compaction on this branch: 4 (anthropic 1, responses-trigger 1, pi-summary 1, pi 1) · usage 510 in / 60 out · $1.1100 (partial)",
     "Native replay: none", "Capabilities: clearing supported", "Recall on this branch: 1 calls",
