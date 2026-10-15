@@ -70,6 +70,20 @@ Forced system prompts are left unchanged. Custom prompts without a documentation
 
 Override the config path with `STRIP_PI_DOCS_CONFIG` (useful for tests).
 
+## Maintainer releases
+
+Automatic publication requires one-time authorization on npm. In this package's
+**Settings → Trusted Publisher → GitHub Actions**, set owner to `ZhenHuangLab`, repository to
+`strip-pi-docs`, workflow filename to `publish.yml` (filename only), and leave environment blank.
+Enable **Allow npm publish**; npm may otherwise allow staged publication only. The workflow uses
+[npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC), so no stored npm token
+is needed.
+
+Update the version in `package.json`, then push the commit and matching `v<version>` tag and publish
+a GitHub Release for that tag. Publishing the GitHub Release triggers npm publication; a tag push
+alone does not. GitHub prereleases and versions with a SemVer prerelease suffix publish to `next`;
+stable releases publish to `latest`.
+
 ## License
 
 MIT
