@@ -102,15 +102,23 @@ passes the command or path of the kept tool call as `query`. Recall never re-run
 
 ## Settings
 
-pi-pleat reads Pi's `compaction` settings. The compaction threshold is the model's context window
-minus `reserveTokens`, and `compaction.modelOverrides` applies per model. `compaction.enabled: false`
-turns off automatic compaction; clearing and `/compact` still work.
+pi-pleat reads Pi's `compaction` settings. `reserveTokens` and `keepRecentTokens` each resolve from
+`compaction.modelOverrides` to `compaction` to Pi's defaults (16,384 and 20,000 tokens).
+`compaction.enabled: false` turns off automatic compaction; clearing and `/compact` still work.
+Invalid compaction token values, which Pi reports as errors, show a pi-pleat warning that names the
+value it uses.
 
-Optional settings go under `pi-pleat` in Pi's `settings.json`
+Set per-model compaction values in Pi's `compaction.modelOverrides`, and optional pi-pleat settings
+under `pi-pleat` in Pi's `settings.json`
 (`~/.pi/agent/settings.json`, or `.pi/settings.json` in a trusted project):
 
 ```json
 {
+  "compaction": {
+    "modelOverrides": {
+      "anthropic/claude-sonnet-5-5": { "reserveTokens": 32768 }
+    }
+  },
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
     "fallbackThinking": "off",
@@ -118,13 +126,18 @@ Optional settings go under `pi-pleat` in Pi's `settings.json`
       "triggerRatio": 0.5,
       "floorRatio": 0.1,
       "keepToolUses": 8,
-      "minBytes": 1024
+      "minBytes": 1024,
+      "modelOverrides": {
+        "anthropic/claude-sonnet-5-5": { "triggerRatio": 0.3, "keepToolUses": 4 }
+      }
     }
   }
 }
 ```
 
-All four `clearing` fields are optional and use these defaults:
+Both override maps use exact `provider/modelId` keys, including case; model ids can contain slashes.
+Each clearing field resolves from the matching model override to `pi-pleat.clearing` to its default.
+All four fields are optional, including inside an override:
 
 | Field under `pi-pleat.clearing` | Default | Valid values | Purpose |
 |---|---|---|---|
@@ -133,12 +146,19 @@ All four `clearing` fields are optional and use these defaults:
 | `keepToolUses` | `8` | Safe integer, `x >= 1` | Keep the newest tool calls and their results |
 | `minBytes` | `1024` | Safe integer, `x >= 0` | Minimum result size for local clearing on non-Anthropic channels |
 
-Both ratios are fractions of the compaction threshold `T = contextWindow - reserveTokens`.
-The trigger and floor are rounded to tokens, with a minimum of 1. Anthropic ignores result size;
-`minBytes` only affects local clearing. Invalid values show a warning and use their defaults. If the
-effective `floorRatio >= triggerRatio`, both ratios use their defaults with one warning. A non-object
-`pi-pleat` or `pi-pleat.clearing` uses all clearing defaults with a warning; unknown clearing keys warn
-and are ignored. According to [Anthropic's context editing docs](https://platform.claude.com/docs/en/build-with-claude/context-editing),
+Both ratios use `T = max(0, contextWindow - reserveTokens)` for that model's window and resolved
+reserve. The clearing trigger and floor are rounded to tokens, with a minimum of 1. Anthropic ignores
+result size; `minBytes` only affects local clearing.
+
+Invalid ordinary clearing values warn and use defaults. If the ordinary `floorRatio >= triggerRatio`,
+both ratios use their defaults with one warning. Invalid override fields warn and keep the resolved
+ordinary or default value; the warning names that value. If an override makes `floorRatio >= triggerRatio`,
+both ratios return to the resolved ordinary pair with one warning; other override fields still apply.
+A non-object `pi-pleat` or `pi-pleat.clearing` uses all clearing defaults with a warning. A non-object
+clearing `modelOverrides` or matching entry warns and is ignored. Unknown keys in ordinary clearing
+settings or a matching override warn and are ignored; non-matching entries are not validated.
+Warnings appear once per session and stay in `/context`'s recent notices. According to
+[Anthropic's context editing docs](https://platform.claude.com/docs/en/build-with-claude/context-editing),
 a lower floor clears more often and rewrites the prompt cache more often.
 
 The fallback model writes the text summaries and the readable summaries on the OpenAI channels.

@@ -1,7 +1,7 @@
 import { getLatestCompactionEntry } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens, readClearingSettings } from "./budget.ts";
+import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens, readClearingSettings, readCompactionSettings } from "./budget.ts";
 import type { Limits, ResponseStats } from "./budget.ts";
 import { createCompactor } from "./compact.ts";
 import type { CompactionDecision } from "./compact.ts";
@@ -44,7 +44,8 @@ export default function piPleat(pi: ExtensionAPI): void {
   }
   function currentLimits(ctx: ExtensionContext, model: Model<Api>): Limits {
     const settings = { ...pi.getSettings() };
-    for (const problem of readClearingSettings(settings).problems) notify(ctx, problem);
+    for (const problem of readCompactionSettings(settings, model).problems) notify(ctx, problem);
+    for (const problem of readClearingSettings(settings, model).problems) notify(ctx, problem);
     return limitsFor(model, settings);
   }
   function report(ctx: ExtensionContext, decision: CompactionDecision): void {

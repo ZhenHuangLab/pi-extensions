@@ -14,8 +14,56 @@ export const DEFAULT_CLEARING: Readonly<ClearingSettings> = Object.freeze({
 });
 export const CONTEXT_SAFETY_TOKENS = 4096;
 
-export function readClearingSettings(settings: Record<string, unknown>): { clearing: ClearingSettings; problems: string[] } {
+function isTokenCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function readCompactionSettings(settings: Record<string, unknown>, model: Pick<Model<Api>, "provider" | "id">): {
+  enabled: boolean; reserve: number; keepRecent: number; problems: string[];
+} {
+  const compaction = isRecord(settings.compaction) ? settings.compaction : {};
+  const overrides = isRecord(compaction.modelOverrides) ? compaction.modelOverrides : {};
+  const key = `${model.provider}/${model.id}`;
+  const entry = overrides[key];
+  const override = isRecord(entry) ? entry : {};
+  const problems: string[] = [];
+  if (entry !== undefined && !isRecord(entry)) {
+    problems.push(`Invalid compaction.modelOverrides["${key}"]: use an object. Using the compaction values.`);
+  }
+  function tokens(field: string, defaultValue: number): number {
+    const value = compaction[field];
+    const ordinary = isTokenCount(value) ? value : undefined;
+    const valueOverride = override[field];
+    const modelValue = isTokenCount(valueOverride) ? valueOverride : undefined;
+    if (value !== undefined && ordinary === undefined) {
+      const label = modelValue === undefined ? `the default ${defaultValue}` : `the compaction.modelOverrides["${key}"] value ${modelValue}`;
+      problems.push(`Invalid compaction.${field}: use a non-negative safe integer. Using ${label}.`);
+    }
+    if (valueOverride !== undefined && modelValue === undefined) {
+      const label = ordinary === undefined ? `the default ${defaultValue}` : `the compaction value ${ordinary}`;
+      problems.push(`Invalid compaction.modelOverrides["${key}"].${field}: use a non-negative safe integer. Using ${label}.`);
+    }
+    return modelValue ?? ordinary ?? defaultValue;
+  }
+  // Pi reads `enabled` with a nullish default and tests it for truthiness.
+  return { enabled: Boolean(compaction.enabled ?? true), reserve: tokens("reserveTokens", 16384),
+    keepRecent: tokens("keepRecentTokens", 20000), problems };
+}
+
+const clearingFields: [keyof ClearingSettings, (value: number) => boolean, string][] = [
+  ["triggerRatio", (value) => value > 0 && value <= 1, "use a finite number greater than 0 and at most 1"],
+  ["floorRatio", (value) => value >= 0 && value < 1, "use a finite number at least 0 and less than 1"],
+  ["keepToolUses", (value) => Number.isSafeInteger(value) && value >= 1, "use a safe integer at least 1"],
+  ["minBytes", (value) => Number.isSafeInteger(value) && value >= 0, "use a safe integer at least 0"],
+];
+
+export function readClearingSettings(settings: Record<string, unknown>, model: Pick<Model<Api>, "provider" | "id">): {
+  clearing: ClearingSettings; problems: string[];
+} {
   const clearing = { ...DEFAULT_CLEARING };
+  const sources: Record<keyof ClearingSettings, "default" | "settings"> = {
+    triggerRatio: "default", floorRatio: "default", keepToolUses: "default", minBytes: "default",
+  };
   const problems: string[] = [];
   const result = { clearing, problems };
   if (!Object.hasOwn(settings, "pi-pleat")) return result;
@@ -31,22 +79,54 @@ export function readClearingSettings(settings: Record<string, unknown>): { clear
     return result;
   }
   for (const key of Object.keys(values)) {
-    if (!Object.hasOwn(DEFAULT_CLEARING, key)) problems.push(`Unknown setting pi-pleat.clearing.${key} ignored.`);
+    if (key !== "modelOverrides" && !Object.hasOwn(DEFAULT_CLEARING, key)) problems.push(`Unknown setting pi-pleat.clearing.${key} ignored.`);
   }
-  const readNumber = (key: keyof ClearingSettings, valid: (value: number) => boolean, rule: string): void => {
-    if (!Object.hasOwn(values, key)) return;
+  for (const [key, valid, rule] of clearingFields) {
+    if (!Object.hasOwn(values, key)) continue;
     const value = values[key];
-    if (typeof value === "number" && Number.isFinite(value) && valid(value)) clearing[key] = value;
-    else problems.push(`Invalid pi-pleat.clearing.${key}: ${rule}. Using the default ${DEFAULT_CLEARING[key]}.`);
-  };
-  readNumber("triggerRatio", (value) => value > 0 && value <= 1, "use a finite number greater than 0 and at most 1");
-  readNumber("floorRatio", (value) => value >= 0 && value < 1, "use a finite number at least 0 and less than 1");
-  readNumber("keepToolUses", (value) => Number.isSafeInteger(value) && value >= 1, "use a safe integer at least 1");
-  readNumber("minBytes", (value) => Number.isSafeInteger(value) && value >= 0, "use a safe integer at least 0");
+    if (typeof value === "number" && Number.isFinite(value) && valid(value)) {
+      clearing[key] = value;
+      sources[key] = "settings";
+    } else problems.push(`Invalid pi-pleat.clearing.${key}: ${rule}. Using the default ${DEFAULT_CLEARING[key]}.`);
+  }
   if (clearing.floorRatio >= clearing.triggerRatio) {
     clearing.triggerRatio = DEFAULT_CLEARING.triggerRatio;
     clearing.floorRatio = DEFAULT_CLEARING.floorRatio;
+    sources.triggerRatio = sources.floorRatio = "default";
     problems.push(`Invalid pi-pleat.clearing.floorRatio: use a value less than pi-pleat.clearing.triggerRatio. Using the default ratios (triggerRatio ${DEFAULT_CLEARING.triggerRatio}, floorRatio ${DEFAULT_CLEARING.floorRatio}).`);
+  }
+  if (!Object.hasOwn(values, "modelOverrides")) return result;
+  const overrides = values.modelOverrides;
+  if (!isRecord(overrides)) {
+    problems.push("Invalid pi-pleat.clearing.modelOverrides: use an object. Ignoring clearing model overrides.");
+    return result;
+  }
+  const key = `${model.provider}/${model.id}`;
+  const entry = overrides[key];
+  if (entry === undefined) return result;
+  const path = `pi-pleat.clearing.modelOverrides["${key}"]`;
+  if (!isRecord(entry)) {
+    problems.push(`Invalid ${path}: use an object. Using the pi-pleat.clearing values.`);
+    return result;
+  }
+  for (const field of Object.keys(entry)) {
+    if (!Object.hasOwn(DEFAULT_CLEARING, field)) problems.push(`Unknown setting ${path}.${field} ignored.`);
+  }
+  const ordinary = { ...clearing };
+  for (const [field, valid, rule] of clearingFields) {
+    if (!Object.hasOwn(entry, field)) continue;
+    const value = entry[field];
+    if (typeof value === "number" && Number.isFinite(value) && valid(value)) clearing[field] = value;
+    else {
+      const label = sources[field] === "settings" ? `the pi-pleat.clearing value ${ordinary[field]}` : `the default ${ordinary[field]}`;
+      problems.push(`Invalid ${path}.${field}: ${rule}. Using ${label}.`);
+    }
+  }
+  if (clearing.floorRatio >= clearing.triggerRatio) {
+    const label = sources.triggerRatio === "default" && sources.floorRatio === "default" ? "the default ratios" : "the pi-pleat.clearing ratios";
+    problems.push(`Invalid ${path}: floorRatio ${clearing.floorRatio} must be less than triggerRatio ${clearing.triggerRatio}. Using ${label} (triggerRatio ${ordinary.triggerRatio}, floorRatio ${ordinary.floorRatio}).`);
+    clearing.triggerRatio = ordinary.triggerRatio;
+    clearing.floorRatio = ordinary.floorRatio;
   }
   return result;
 }
@@ -64,22 +144,12 @@ export interface Limits {
 }
 
 export function limitsFor(model: Model<Api>, settings: Record<string, unknown>): Limits {
-  const clearing = readClearingSettings(settings).clearing;
-  const compaction = isRecord(settings.compaction) ? settings.compaction : {};
-  const overrides = isRecord(compaction.modelOverrides) ? compaction.modelOverrides : {};
-  const value = overrides[`${model.provider}/${model.id}`];
-  const override = isRecord(value) ? value : {};
-  function tokens(field: string, defaultValue: number): number {
-    for (const candidate of [override[field], compaction[field]]) {
-      if (typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0) return candidate;
-    }
-    return defaultValue;
-  }
-  const reserve = tokens("reserveTokens", 16384);
-  const threshold = Math.max(0, model.contextWindow - reserve);
+  const compaction = readCompactionSettings(settings, model);
+  const clearing = readClearingSettings(settings, model).clearing;
+  const threshold = Math.max(0, model.contextWindow - compaction.reserve);
   return {
-    window: model.contextWindow, reserve, keepRecent: tokens("keepRecentTokens", 20000),
-    enabled: compaction.enabled !== false, threshold,
+    window: model.contextWindow, reserve: compaction.reserve, keepRecent: compaction.keepRecent,
+    enabled: compaction.enabled, threshold,
     clearTrigger: Math.max(1, Math.round(clearing.triggerRatio * threshold)),
     clearFloor: Math.max(1, Math.round(clearing.floorRatio * threshold)),
     keepToolUses: clearing.keepToolUses, minClearBytes: clearing.minBytes,

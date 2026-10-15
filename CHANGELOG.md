@@ -2,6 +2,15 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Set per-model clearing values through `pi-pleat.clearing.modelOverrides["provider/modelId"]`, with
+  each field falling back to `pi-pleat.clearing` and then its default.
+- Invalid `compaction.reserveTokens` and `keepRecentTokens` values, including in
+  `compaction.modelOverrides`, warn and name the value pi-pleat uses.
+- `compaction.enabled` is read as Pi reads it: an omitted or `null` value keeps automatic compaction on,
+  and `false`, `0` or `""` turns it off.
+
 ## 0.1.1 (2026-10-14)
 
 - Configure clearing trigger and floor ratios, kept tool uses, and the minimum local result size

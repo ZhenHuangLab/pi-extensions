@@ -416,9 +416,12 @@ pi-pleat 无法在占位文字中加入召回 ID；首次发送前加入的 ID �
 
 ## 9. 预算、统计与失败
 
-压缩阈值 T 沿用 Pi 的 `C − reserveTokens`。`reserveTokens` 和 `keepRecentTokens` 各自依次取
-`compaction.modelOverrides["<provider>/<model>"]`、`compaction` 的同名设置和 Pi 默认值（16,384、20,000），
-只接受非负安全整数。
+压缩阈值 T 沿用 Pi 的 `C − reserveTokens`，C 是当前模型的窗口，计算结果最小为 0。
+`reserveTokens` 和 `keepRecentTokens` 各自依次取 `compaction.modelOverrides["provider/modelId"]`、
+`compaction` 的同名设置和 Pi 默认值（16,384、20,000），只接受非负安全整数。键精确区分大小写，模型 ID
+可以包含斜线。普通值无效（即使模型覆盖有效）、匹配条目不是对象或匹配字段无效时，Pi 会抛错；pi-pleat
+警告并按上述顺序使用有效值或默认值，警告说明使用的值。不匹配的条目不读取；`compaction` 或其
+`modelOverrides` 不是对象时，token 设置与 Pi 一样不报告问题。清理触发点和释放下限都按这个模型的 T 计算。
 
 Anthropic 在 `turn_end` 自行触发压缩。服务端清理后的用量会低估完整历史，而原生压缩请求不能带
 `context_management`，必须装入未清理的历史。因此触发值取 Pi 的上下文估算加上最新回复报告的
@@ -429,12 +432,12 @@ applied_edits 只在能确定属于该回复时才计入：同时打开的流、
 缺少服务端统计时 `/context` 标记“估算”，不能把缺失值当零。
 
 清理触发点 0.5T、释放下限 0.1T、保留最近 8 次工具调用（K）和最小清理大小 1 KB
-是 `pi-pleat.clearing` 的默认值，由阶段 6 的对照结果评估和调整。`triggerRatio` 接受大于 0 且不超过 1
-的有限数，`floorRatio` 接受不小于 0 且小于 1 的有限数；两者按 T 的比例计算，四舍五入后最少为 1 token。
-`keepToolUses` 接受不小于 1 的安全整数；`minBytes` 接受不小于 0 的安全整数，只影响非 Anthropic 通道的
-本地清理，Anthropic 服务端不考虑大小。候选合计达不到下限时不清理。按 Anthropic 的
-[上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存
-重写越频繁。清理减少输入内容，并不保证抵消缓存重写费用。
+是 `pi-pleat.clearing` 的默认值，可通过其 `modelOverrides` 按模型覆盖，由阶段 6 的对照结果评估和调整。
+`triggerRatio` 接受大于 0 且不超过 1 的有限数，`floorRatio` 接受不小于 0 且小于 1 的有限数；两者按当前
+模型 T 的比例计算，四舍五入后最少为 1 token。`keepToolUses` 接受不小于 1 的安全整数；`minBytes` 接受
+不小于 0 的安全整数，只影响非 Anthropic 通道的本地清理，Anthropic 服务端不考虑大小。候选合计达不到下限
+时不清理。按 Anthropic 的[上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，
+释放下限越低，清理和提示缓存重写越频繁。清理减少输入内容，并不保证抵消缓存重写费用。
 
 清理触发点不影响 thinking，对压缩时间的影响也很小。Anthropic 的压缩请求不能同时带
 `context_management`，要发送未清理的历史并装入窗口，所以 Anthropic 上的压缩时间只由完整
@@ -481,9 +484,14 @@ Anthropic 压缩用量读取 `usage.iterations` 中的 compaction 项，存入�
 所有允许的方法均失败时保持原历史并报告错误。
 
 可选设置位于 Pi 设置中 `pi-pleat` 键下：`fallbackModel`（`provider/model`）、`fallbackThinking` 和
-`clearing`。清理的四项均可省略；无效值通过会话内去重的警告说明使用默认值，并保留在 `/context` 的最近
-诊断中。逐项校验后，若有效的 `floorRatio >= triggerRatio`，两个比例都恢复默认值，只显示一条警告。
-`pi-pleat` 或 `pi-pleat.clearing` 不是对象时使用全部清理默认值并警告；`clearing` 中的未知键警告并忽略。
+`clearing`。清理的四项均可省略，也可在 `pi-pleat.clearing.modelOverrides["provider/modelId"]` 中按模型设置；
+每项依次取匹配的模型覆盖、`pi-pleat.clearing` 的同名值和默认值。键精确区分大小写，模型 ID 可以包含斜线。
+普通值无效时警告并用默认值；普通的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。
+覆盖字段无效时保留解析后的普通值或默认值，警告说明使用的值。覆盖后的 `floorRatio >= triggerRatio` 时，
+两个比例都恢复为解析后的普通比例，警告说明冲突值和恢复值；其他覆盖字段仍生效。
+`pi-pleat` 或 `pi-pleat.clearing` 不是对象时使用全部清理默认值并警告；清理的 `modelOverrides` 或匹配条目
+不是对象时警告并忽略相应覆盖。不匹配的条目不读取、不校验；普通清理设置和匹配条目中的未知键警告并忽略，
+覆盖条目不能再嵌套 `modelOverrides`。设置警告在会话内去重，并保留在 `/context` 的最近诊断中。
 回退摘要模型依次取当前分支最新的 `/context fallback` 会话覆盖、设置、会话模型。thinking 依次取覆盖或
 设置中的级别；都未设置时，指定的模型用 `off`，会话模型用会话的 thinking 级别；最后按模型能力限制。
 配置无效时记录诊断（`/context` 显示错误），改用会话模型。`/context fallback <provider/model> [level]`

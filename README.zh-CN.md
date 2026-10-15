@@ -69,12 +69,17 @@ Pass `id` from a cleared-output note, or `query` (command, path, tool name, or t
 
 ## 设置
 
-pi-pleat 读取 Pi 的 `compaction` 设置。压缩阈值等于模型的上下文窗口减去 `reserveTokens`，`compaction.modelOverrides` 按模型生效。`compaction.enabled: false` 关闭自动压缩；清理和 `/compact` 仍然可用。
+pi-pleat 读取 Pi 的 `compaction` 设置。`reserveTokens` 和 `keepRecentTokens` 各自依次取 `compaction.modelOverrides`、`compaction` 的同名值和 Pi 默认值（16,384、20,000 tokens）。`compaction.enabled: false` 关闭自动压缩；清理和 `/compact` 仍然可用。Pi 会报告为错误的无效压缩 token 值，在 pi-pleat 中会显示警告，并说明使用的值。
 
-可选设置写在 Pi 的 `settings.json`（`~/.pi/agent/settings.json`，或受信任项目中的 `.pi/settings.json`）的 `pi-pleat` 下：
+按模型的压缩设置写在 Pi 的 `compaction.modelOverrides` 中，pi-pleat 的可选设置写在 `pi-pleat` 下。两者都位于 Pi 的 `settings.json`（`~/.pi/agent/settings.json`，或受信任项目中的 `.pi/settings.json`）：
 
 ```json
 {
+  "compaction": {
+    "modelOverrides": {
+      "anthropic/claude-sonnet-5-5": { "reserveTokens": 32768 }
+    }
+  },
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
     "fallbackThinking": "off",
@@ -82,13 +87,16 @@ pi-pleat 读取 Pi 的 `compaction` 设置。压缩阈值等于模型的上下�
       "triggerRatio": 0.5,
       "floorRatio": 0.1,
       "keepToolUses": 8,
-      "minBytes": 1024
+      "minBytes": 1024,
+      "modelOverrides": {
+        "anthropic/claude-sonnet-5-5": { "triggerRatio": 0.3, "keepToolUses": 4 }
+      }
     }
   }
 }
 ```
 
-`clearing` 的四项都可以省略，默认值如下：
+两处覆盖都使用精确区分大小写的 `provider/modelId` 键，模型 ID 可以包含斜线。清理的每项依次取匹配的模型覆盖、`pi-pleat.clearing` 的同名值和默认值。下面四项均可省略，模型覆盖中也一样：
 
 | `pi-pleat.clearing` 下的字段 | 默认值 | 有效范围 | 用途 |
 |---|---|---|---|
@@ -97,7 +105,9 @@ pi-pleat 读取 Pi 的 `compaction` 设置。压缩阈值等于模型的上下�
 | `keepToolUses` | `8` | 安全整数，`x >= 1` | 保留最近这些工具调用及其结果 |
 | `minBytes` | `1024` | 安全整数，`x >= 0` | 非 Anthropic 通道本地清理的最小结果字节数 |
 
-两个比例都以压缩阈值 `T = contextWindow - reserveTokens` 为基准，换算为 tokens 后四舍五入，最少为 1。`minBytes` 只影响非 Anthropic 通道的本地清理；Anthropic 服务端不考虑结果大小。无效值会显示警告并使用默认值。有效的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。`pi-pleat` 或 `pi-pleat.clearing` 不是对象时，警告并使用全部清理默认值；清理设置中的未知键会警告并忽略。按 [Anthropic 的上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存重写越频繁。
+两个比例都以当前模型的窗口和解析后的 `reserveTokens` 得到的压缩阈值 `T = max(0, contextWindow - reserveTokens)` 为基准。清理触发点和释放下限换算为 tokens 后四舍五入，最少为 1。`minBytes` 只影响非 Anthropic 通道的本地清理；Anthropic 服务端不考虑结果大小。
+
+普通清理设置的无效值会警告并使用默认值；普通设置的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。模型覆盖的无效字段会警告并保留解析后的普通值或默认值，警告会说明使用的值。覆盖后的 `floorRatio >= triggerRatio` 时，两个比例都恢复为解析后的普通比例，只显示一条警告；其他覆盖字段仍然生效。`pi-pleat` 或 `pi-pleat.clearing` 不是对象时，警告并使用全部清理默认值。清理的 `modelOverrides` 或匹配条目不是对象时，警告并忽略相应覆盖。普通清理设置或匹配条目中的未知键会警告并忽略；不匹配的条目不校验。警告在每个会话中只显示一次，并保留在 `/context` 的最近提示中。按 [Anthropic 的上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存重写越频繁。
 
 回退模型负责写文本摘要，以及 OpenAI 通道上的可读摘要。设置了模型时，`fallbackThinking` 默认是 `off`。没有设置回退模型时，这些摘要由会话模型按会话的 thinking 级别来写；`/compact` 或 Pi 的阈值找不到可用的原生压缩时，由 Pi 自己压缩。原生压缩始终使用会话模型。
 

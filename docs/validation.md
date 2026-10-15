@@ -25,7 +25,7 @@ HTTP body 断言；通用路径使用合成 provider。重启检查用新的会�
 | --- | ---: | --- |
 | `test/anthropic-native.test.mjs` | 30 | `turn_end` 原生压缩复用最后一次 HTTP body；连续两次压缩；`max_tokens` 正好 4096；保留后缀超过阈值时跳过；提交前检查替代内容和保留后缀能否装入窗口；重启回放和分支导航；通道切换；手动压缩与自定义说明；不支持、529 重试、暂时失败三次后回退、取消、状态变化、`system-changed`、完整性失败、refusal、回放拒绝；单 token 请求不绑定；发送前失败、网络失败和响应体截断时的 HTTP 错误分类与 retry-after；每个 compaction 用量项都要有有效计数，缺用量时重启后仍显示未知 |
 | `test/anthropic.test.mjs` | 10 | 清理配置进入实际 HTTP body 且不改提示、工具和 thinking；已有配置保持不变；applied_edits 按回复计数，清理前大小加上已清理 tokens；清理不受支持时一次恢复，重启后保持关闭；不形成恢复循环；Anthropic 不做本地清理 |
-| `test/clearing.test.mjs` | 11 | 阈值与按模型覆盖；本地清理的触发点、下限、最近 8 次调用、1 KB、已编辑/已省略/已覆盖结果和 Claude thinking 之前的结果；分支内提交并可召回原文；覆盖范围；用量与估算标记；applied_edits 归属未知时改用完整投影估算 |
+| `test/clearing.test.mjs` | 11 | 压缩设置按模型逐项解析，与 Pi 的有效值和错误情况对照，无效值警告说明回退值；清理设置按模型逐项覆盖、精确键匹配、无效字段与条目诊断、比例冲突恢复；本地清理的触发点、下限、最近 8 次调用、1 KB、已编辑/已省略/已覆盖结果和 Claude thinking 之前的结果；分支内提交并可召回原文；覆盖范围；用量与估算标记；applied_edits 归属未知时改用完整投影估算 |
 | `test/fallback.test.mjs` | 32 | 分块摘要、前一摘要串联和 Pi 文件列表；放得下时使用 Pi `compact()`；回退模型解析顺序；配置模型失败后交回 Pi 或改用会话模型；`turn_end` 回退切点与 Pi 投影规则一致；回复校验；摘要期间和排队期间的状态变化；摘要回复额度、thinking 预算和安全余量，上一摘要和自定义说明计入输入预算；只记已知用量并标记不完整；文本压缩提交前的窗口检查及其边界 |
 | `test/lifecycle.test.mjs` | 6 | 实现前的 Pi 宿主契约，见[本地生命周期](#本地生命周期) |
 | `test/recall.test.mjs` | 9 | 按条目 ID、调用 ID 和查询取回；分支隔离；压缩和清理后的原文；按字节、行数和单个长行截断并写临时文件；图片；保存片段说明；错误信息；经 Pi 调用工具 |
@@ -126,7 +126,7 @@ Codex 官方客户端在 2026-10-13 加入后台压缩（提交 `1a69ad32`、`91
 ### 仍未验证
 
 - `openai`/`openai-responses` 真实通道，目前只有本地模拟服务。
-- 非默认的 `pi-pleat.clearing` 参数尚未在 Anthropic 真实接口上检查。
+- 非默认的 `pi-pleat.clearing` 参数（包括 `modelOverrides` 按模型覆盖）尚未在 Anthropic 真实接口上检查。
 - 实际服务端清理：`applied_edits` 的真实值，清理后缓存从哪里开始重写、多久重写一次。
 - 非 Anthropic 通道的本地清理在真实任务中触发后的表现。
 - 真实模型的召回行为：是否在需要时调用 `recall`，查询能否一次取到所需结果。
