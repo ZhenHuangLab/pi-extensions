@@ -6,6 +6,9 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/v/prompt-per-model" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/dm/prompt-per-model" alt="npm downloads per month"></a>
+  <a href="https://github.com/ZhenHuangLab/prompt-per-model/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/prompt-per-model" alt="GitHub tag"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="Tested with Pi 1.2.0">
 </p>
@@ -21,7 +24,7 @@ they were.
 ## Install
 
 ```sh
-pi install git:github.com/ZhenHuangLab/prompt-per-model
+pi install npm:prompt-per-model
 ```
 
 At its first start, the extension creates `~/.pi/agent/prompt-per-model/`.

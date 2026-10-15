@@ -6,6 +6,9 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/v/prompt-per-model" alt="npm 版本"></a>
+  <a href="https://www.npmjs.com/package/prompt-per-model"><img src="https://img.shields.io/npm/dm/prompt-per-model" alt="npm 每月下载量"></a>
+  <a href="https://github.com/ZhenHuangLab/prompt-per-model/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/prompt-per-model" alt="GitHub 标签"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="许可证：MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="已在 Pi 1.2.0 上测试">
 </p>
@@ -17,7 +20,7 @@
 ## 安装
 
 ```sh
-pi install git:github.com/ZhenHuangLab/prompt-per-model
+pi install npm:prompt-per-model
 ```
 
 首次启动时，扩展会创建 `~/.pi/agent/prompt-per-model/`。
