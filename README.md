@@ -1,5 +1,10 @@
 # pi-tool-fold
 
+[![npm version](https://img.shields.io/npm/v/pi-tool-fold?color=cb3837&logo=npm)](https://www.npmjs.com/package/pi-tool-fold)
+[![npm monthly downloads](https://img.shields.io/npm/dm/pi-tool-fold)](https://www.npmjs.com/package/pi-tool-fold)
+[![GitHub tag](https://img.shields.io/github/v/tag/ZhenHuangLab/pi-tool-fold)](https://github.com/ZhenHuangLab/pi-tool-fold/tags)
+[![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Fold completed tool calls in the pi transcript into a single line:
 
 ```
@@ -13,6 +18,12 @@ Fold completed tool calls in the pi transcript into a single line:
 Press the shortcut again and everything comes back, byte for byte. This is a
 rendering change only — the session file, the LLM context, and tool state are
 never touched, so it is safe to toggle at any point, including mid-turn.
+
+## Install
+
+```bash
+pi install npm:pi-tool-fold
+```
 
 ## Usage
 
@@ -134,3 +145,16 @@ Ordering and timing come from `sessionManager.buildContextEntries()`, which is
 also what pi renders the transcript from. A tool call that is not in that plan —
 still running, aborted, or older than the rendered context window — always
 renders normally, so nothing can disappear without a summary standing in for it.
+
+## Maintainer releases
+
+For one-time setup, open the npm package's **Settings → Trusted Publisher → GitHub Actions**.
+Set owner to `ZhenHuangLab`, repository to `pi-tool-fold`, and workflow
+filename to `publish.yml`. Leave environment blank. You must enable
+**Allow npm publish**; the default may allow only staging. Publishing uses OIDC
+without a stored npm token.
+
+Update the version in `package.json` and any tracked lockfile, then push the
+commit and matching `v<version>` tag. Publish a GitHub Release for that tag to
+run the workflow; pushing the tag alone does not trigger it. Prereleases publish
+to `next`; stable releases publish to `latest`. Do not move old tags.
