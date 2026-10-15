@@ -6,6 +6,9 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/v/pi-pleat" alt="npm 版本"></a>
+  <a href="https://www.npmjs.com/package/pi-pleat"><img src="https://img.shields.io/npm/dm/pi-pleat" alt="npm 每月下载量"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-pleat/tags"><img src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-pleat" alt="GitHub 标签"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="许可证：MIT"></a>
   <img src="https://img.shields.io/badge/Pi-1.2.0-2DF9C0" alt="已在 Pi 1.2.0 上测试">
 </p>
@@ -17,7 +20,7 @@ pi-pleat 让很长的 Pi 会话保持在模型的上下文窗口之内。旧的�
 ## 安装
 
 ```sh
-pi install git:github.com/ZhenHuangLab/pi-pleat
+pi install npm:pi-pleat
 ```
 
 也可以从本地克隆安装：

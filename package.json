@@ -1,6 +1,6 @@
 {
   "name": "pi-pleat",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Context management for Pi: clears old tool output, recalls it on demand, and uses native compaction on Anthropic and OpenAI Responses models",
   "type": "module",
   "keywords": [
@@ -10,6 +10,8 @@
   "files": [
     "src",
     "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "pi": {
@@ -20,6 +22,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ZhenHuangLab/pi-pleat.git"
+  },
+  "homepage": "https://github.com/ZhenHuangLab/pi-pleat#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/pi-pleat/issues"
   },
   "engines": {
     "node": ">=22.19.0"

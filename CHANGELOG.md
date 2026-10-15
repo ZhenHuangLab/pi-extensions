@@ -2,6 +2,11 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.1.3 (2026-10-15)
+
+- Publish to npm with installation instructions and version, download, and Git tag badges.
+- Include the Chinese README and changelog in the package.
+
 ## 0.1.2 (2026-10-14)
 
 - Set per-model clearing values through `pi-pleat.clearing.modelOverrides["provider/modelId"]`, with
