@@ -4,6 +4,8 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm version" src="https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search?color=cb3837&amp;logo=npm"></a>
+  <a href="https://www.npmjs.com/package/@zhenhuang/pi-xai-search"><img alt="npm monthly downloads" src="https://img.shields.io/npm/dm/%40zhenhuang%2Fpi-xai-search"></a>
+  <a href="https://github.com/ZhenHuangLab/pi-xai-search/tags"><img alt="GitHub tag" src="https://img.shields.io/github/v/tag/ZhenHuangLab/pi-xai-search"></a>
   <a href="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ZhenHuangLab/pi-xai-search/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://nodejs.org/"><img alt="Node.js 22.19 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522.19-339933?logo=node.js&amp;logoColor=white"></a>
   <a href="https://github.com/earendil-works/pi-mono"><img alt="Pi 0.83.0 or newer" src="https://img.shields.io/badge/Pi-%E2%89%A50.83.0-7c3aed"></a>
@@ -307,6 +309,19 @@ Useful commands:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security reports should follow [SECURITY.md](SECURITY.md).
 
+## Maintainer releases
+
+For one-time setup, open the npm package's **Settings → Trusted Publisher → GitHub Actions**.
+Set owner to `ZhenHuangLab`, repository to `pi-xai-search`, and workflow
+filename to `publish.yml`. Leave environment blank. You must enable
+**Allow npm publish**; the default may allow only staging. Publishing uses OIDC
+without a stored npm token.
+
+Update the version in `package.json` and any tracked lockfile, then push the
+commit and matching `v<version>` tag. Publish a GitHub Release for that tag to
+run the workflow; pushing the tag alone does not trigger it. Prereleases publish
+to `next`; stable releases publish to `latest`. Do not move old tags.
+
 ## License
 
 [MIT](LICENSE)
@@ -315,4 +330,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Security r
 
 ## Acknowledgments
 
-[LINUX DO](https://linux.do) 
+[LINUX DO](https://linux.do)
