@@ -22,7 +22,16 @@ PI_CONTEXT_LIVE=0 npm test
 
 ## Configure npm Trusted Publishing
 
-Configure a Trusted Publisher separately in the npm settings of **every package** before its first release from this repository. Use these exact GitHub settings:
+Configure a Trusted Publisher for **every package** before its first release from this repository. With npm 11.15.0 or later, run this command for each package, replacing `pi-pleat` with its npm name:
+
+```sh
+npm trust github pi-pleat --repo ZhenHuangLab/pi-extensions --file publish.yml --allow-publish --yes
+npm trust list pi-pleat --json
+```
+
+These commands require interactive two-factor authentication. The npm authentication page may offer to skip repeat verification for five minutes. For batch configuration, leave two seconds between packages to avoid rate limiting. `npm trust` does not accept `--workspaces`; pass each package name explicitly.
+
+You can also configure this through the package's **Settings → Trusted Publisher** page on npm. For example, the settings page for `pi-pleat` is <https://www.npmjs.com/package/pi-pleat/access>. Use these exact GitHub settings:
 
 | Setting | Value |
 | --- | --- |
