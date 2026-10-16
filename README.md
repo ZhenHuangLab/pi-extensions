@@ -18,6 +18,7 @@ Independent [Pi](https://github.com/earendil-works/pi) extensions maintained in 
 | [pi-better-math](packages/pi-better-math) | Render LaTeX math as Unicode in Pi's terminal UI. | [GPL-3.0-or-later](packages/pi-better-math/LICENSE) | [![npm version](https://img.shields.io/npm/v/pi-better-math)](https://www.npmjs.com/package/pi-better-math) |
 | [pi-tool-fold](packages/pi-tool-fold) | Fold completed tool calls in the transcript. | [MIT](packages/pi-tool-fold/LICENSE) | [![npm version](https://img.shields.io/npm/v/pi-tool-fold)](https://www.npmjs.com/package/pi-tool-fold) |
 | [pi-session-mentions](packages/pi-session-mentions) | Search and reference local Pi, Claude Code, and Codex sessions. | [MIT](packages/pi-session-mentions/LICENSE) | [![npm version](https://img.shields.io/npm/v/pi-session-mentions)](https://www.npmjs.com/package/pi-session-mentions) |
+| [@zhenhuang/pi-apply-patch](packages/pi-apply-patch) | Edit files with Codex patches and stable tool registration. | [Apache-2.0](packages/pi-apply-patch/LICENSE) | [![npm version](https://img.shields.io/npm/v/%40zhenhuang%2Fpi-apply-patch)](https://www.npmjs.com/package/@zhenhuang/pi-apply-patch) |
 
 ## Install
 
@@ -32,6 +33,7 @@ pi install npm:@zhenhuang/pi-xai-search
 pi install npm:pi-better-math
 pi install npm:pi-tool-fold
 pi install npm:pi-session-mentions
+pi install npm:@zhenhuang/pi-apply-patch
 ```
 
 See each package's README for configuration and usage.
@@ -67,4 +69,4 @@ Historical tags retain their original tag objects under namespaced refs and poin
 
 ## Licenses
 
-The [root MIT license](LICENSE) covers root tooling and documentation. Each package retains its own license: `pi-better-math` is GPL-3.0-or-later and depends on GPL-licensed `libtexprintf`; the other packages are MIT licensed. Review the license and notices in each package before use or distribution.
+The [root MIT license](LICENSE) covers root tooling and documentation. Each package retains its own license: `pi-better-math` is GPL-3.0-or-later and depends on GPL-licensed `libtexprintf`; `@zhenhuang/pi-apply-patch` is Apache-2.0 and adapts OpenAI Codex algorithms; the other packages are MIT licensed. Review the license and notices in each package before use or distribution.

@@ -1,6 +1,6 @@
 # Releasing packages
 
-Each workspace has its own npm name, version, changelog, and license. Changesets manages independent version changes; there are no fixed or linked release groups. The repository root is private. Publishing runs only when a GitHub Release is published, and each release selects exactly one workspace.
+Each workspace has its own npm name, version, changelog, and license. Changesets manages independent version changes; there are no fixed or linked release groups. The repository root is private. Automated publishing runs when a GitHub Release is published, and each release selects exactly one workspace. A new npm package requires one approved manual publish before Trusted Publishing can be configured.
 
 ## Prepare versions
 
@@ -20,9 +20,23 @@ PI_CONTEXT_LIVE=0 npm test
 
 `version-packages` runs `changeset version`, updates each affected version and changelog, consumes its changesets, and refreshes the single root `package-lock.json` with lifecycle scripts disabled. Review and commit the package changes, changelogs, consumed changesets, and root lockfile, then push the commit to `main`. The initial migration changeset requests a patch bump for all seven packages and records the source and metadata move; source behavior is unchanged.
 
+## Bootstrap a new npm package
+
+npm requires a package to exist on its registry before `npm trust` can configure a Trusted Publisher. For a package that has never been published, obtain explicit approval for one manual publish. Complete the checks above, commit and push its initial version to `main`, then publish that workspace using the maintainer's authenticated npm account:
+
+```sh
+NPM_PACKAGE=@zhenhuang/pi-apply-patch
+npm publish --workspace="$NPM_PACKAGE" --ignore-scripts --access public --tag latest
+npm view "$NPM_PACKAGE" version
+```
+
+Use the package's actual name and initial version. Create and push its annotated `<npm-package-name>@<version>` tag, but do not create a GitHub Release for that already published version: the workflow would attempt to publish it again and fail.
+
+Configure its Trusted Publisher immediately after the manual publish. Add and apply a patch changeset that records the move to GitHub publishing, then create a GitHub Release for the new version using the steps below. Complete that automated publish within npm's two-day trust setup window and confirm that the workflow succeeds. All subsequent versions use the GitHub Release workflow.
+
 ## Configure npm Trusted Publishing
 
-Configure a Trusted Publisher for **every package** before its first release from this repository. With npm 11.15.0 or later, run this command for each package, replacing `pi-pleat` with its npm name:
+Configure a Trusted Publisher for **every existing npm package** before its first automated release from this repository. With npm 11.15.0 or later, run this command for each package, replacing `pi-pleat` with its npm name:
 
 ```sh
 npm trust github pi-pleat --repo ZhenHuangLab/pi-extensions --file publish.yml --allow-publish --yes

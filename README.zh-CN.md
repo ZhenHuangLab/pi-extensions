@@ -18,6 +18,7 @@
 | [pi-better-math](packages/pi-better-math) | 在 Pi 终端界面中将 LaTeX 数学公式渲染为 Unicode。 | [GPL-3.0-or-later](packages/pi-better-math/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/pi-better-math)](https://www.npmjs.com/package/pi-better-math) |
 | [pi-tool-fold](packages/pi-tool-fold) | 折叠对话记录中已完成的工具调用。 | [MIT](packages/pi-tool-fold/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/pi-tool-fold)](https://www.npmjs.com/package/pi-tool-fold) |
 | [pi-session-mentions](packages/pi-session-mentions) | 搜索并引用本机 Pi、Claude Code 和 Codex 会话。 | [MIT](packages/pi-session-mentions/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/pi-session-mentions)](https://www.npmjs.com/package/pi-session-mentions) |
+| [@zhenhuang/pi-apply-patch](packages/pi-apply-patch) | 使用 Codex 补丁编辑文件，稳定注册工具。 | [Apache-2.0](packages/pi-apply-patch/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/%40zhenhuang%2Fpi-apply-patch)](https://www.npmjs.com/package/@zhenhuang/pi-apply-patch) |
 
 ## 安装
 
@@ -32,6 +33,7 @@ pi install npm:@zhenhuang/pi-xai-search
 pi install npm:pi-better-math
 pi install npm:pi-tool-fold
 pi install npm:pi-session-mentions
+pi install npm:@zhenhuang/pi-apply-patch
 ```
 
 配置与使用方法见各包的 README。
@@ -67,4 +69,4 @@ PI_CONTEXT_LIVE=0 npm test --workspace @zhenhuang/pi-xai-search
 
 ## 许可证
 
-[根目录的 MIT 许可证](LICENSE) 适用于根目录的工具和文档。每个包保留自己的许可证：`pi-better-math` 使用 GPL-3.0-or-later，并依赖使用 GPL 许可证的 `libtexprintf`；其余包使用 MIT。使用或分发前，请查阅相应包的许可证和声明。
+[根目录的 MIT 许可证](LICENSE) 适用于根目录的工具和文档。每个包保留自己的许可证：`pi-better-math` 使用 GPL-3.0-or-later，并依赖使用 GPL 许可证的 `libtexprintf`；`@zhenhuang/pi-apply-patch` 使用 Apache-2.0，移植了 OpenAI Codex 的算法；其余包使用 MIT。使用或分发前，请查阅相应包的许可证和声明。

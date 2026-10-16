@@ -1,0 +1,19 @@
+OpenAI Codex
+Copyright 2025 OpenAI
+
+This package includes a TypeScript adaptation of the patch parser, context
+matching, and text update algorithms in OpenAI Codex, and its apply_patch
+Lark grammar, under the Apache License, Version 2.0.
+
+Source: https://github.com/openai/codex
+Revision: 4eb4a65407d98cebc4c83bf13be440b9fbc78a7c (2026-10-16)
+Files: codex-rs/apply-patch/src/{parser,streaming_parser,file_update,
+       text_file,seek_sequence}.rs
+       codex-rs/core/assets/tools/apply_patch.lark
+
+Modifications: TypeScript implementation for Pi, complete-input parsing,
+explicit input validation, BOM preservation, filesystem preflight and mutation
+queues, exclusive destination creation, and partial failure reporting.
+
+Pi integration and modifications
+Copyright 2026 ZhenHuangLab

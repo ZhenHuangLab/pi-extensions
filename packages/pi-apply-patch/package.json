@@ -1,0 +1,47 @@
+{
+  "name": "@zhenhuang/pi-apply-patch",
+  "version": "0.1.0",
+  "description": "Codex-style apply_patch for Pi with stable tool registration and native grammar support.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "ZhenHuangLab",
+  "keywords": ["pi-package", "pi-extension", "apply-patch", "codex"],
+  "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/pi-apply-patch#readme",
+  "bugs": {
+    "url": "https://github.com/ZhenHuangLab/pi-extensions/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZhenHuangLab/pi-extensions.git",
+    "directory": "packages/pi-apply-patch"
+  },
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "files": ["index.ts", "src", "docs", "README.md", "README.zh-CN.md", "CHANGELOG.md", "LICENSE", "NOTICE"],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=1.2.0",
+    "@earendil-works/pi-tui": ">=1.2.0",
+    "typebox": "^1.3.6"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.2.0",
+    "@earendil-works/pi-tui": "1.2.0",
+    "@types/node": "^26.4.0",
+    "typebox": "^1.3.6",
+    "typescript": "^7.0.2"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
