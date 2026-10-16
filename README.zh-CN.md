@@ -17,6 +17,7 @@
 | [@zhenhuang/pi-xai-search](packages/pi-xai-search) | 使用 xAI 原生搜索工具搜索 X。 | [MIT](packages/pi-xai-search/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search)](https://www.npmjs.com/package/@zhenhuang/pi-xai-search) |
 | [pi-better-math](packages/pi-better-math) | 在 Pi 终端界面中将 LaTeX 数学公式渲染为 Unicode。 | [GPL-3.0-or-later](packages/pi-better-math/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/pi-better-math)](https://www.npmjs.com/package/pi-better-math) |
 | [pi-tool-fold](packages/pi-tool-fold) | 折叠对话记录中已完成的工具调用。 | [MIT](packages/pi-tool-fold/LICENSE) | [![npm 版本](https://img.shields.io/npm/v/pi-tool-fold)](https://www.npmjs.com/package/pi-tool-fold) |
+| [pi-session-mentions](packages/pi-session-mentions) | 搜索并引用本机 Pi、Claude Code 和 Codex 会话。 | [MIT](packages/pi-session-mentions/LICENSE) | 尚未发布 |
 
 ## 安装
 
@@ -33,6 +34,8 @@ pi install npm:pi-tool-fold
 ```
 
 配置与使用方法见各包的 README。
+
+从本地仓库使用 `pi-session-mentions`，执行 `pi install ./packages/pi-session-mentions`。
 
 ## 本地开发
 
@@ -65,4 +68,4 @@ PI_CONTEXT_LIVE=0 npm test --workspace @zhenhuang/pi-xai-search
 
 ## 许可证
 
-[根目录的 MIT 许可证](LICENSE) 适用于根目录的工具和文档。每个包保留自己的许可证：`pi-better-math` 使用 GPL-3.0-or-later，并依赖使用 GPL 许可证的 `libtexprintf`；其余六个包使用 MIT。使用或分发前，请查阅相应包的许可证和声明。
+[根目录的 MIT 许可证](LICENSE) 适用于根目录的工具和文档。每个包保留自己的许可证：`pi-better-math` 使用 GPL-3.0-or-later，并依赖使用 GPL 许可证的 `libtexprintf`；其余包使用 MIT。使用或分发前，请查阅相应包的许可证和声明。

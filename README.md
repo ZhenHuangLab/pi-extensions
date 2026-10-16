@@ -17,6 +17,7 @@ Independent [Pi](https://github.com/earendil-works/pi) extensions maintained in 
 | [@zhenhuang/pi-xai-search](packages/pi-xai-search) | Search X with xAI's native search tool. | [MIT](packages/pi-xai-search/LICENSE) | [![npm version](https://img.shields.io/npm/v/%40zhenhuang%2Fpi-xai-search)](https://www.npmjs.com/package/@zhenhuang/pi-xai-search) |
 | [pi-better-math](packages/pi-better-math) | Render LaTeX math as Unicode in Pi's terminal UI. | [GPL-3.0-or-later](packages/pi-better-math/LICENSE) | [![npm version](https://img.shields.io/npm/v/pi-better-math)](https://www.npmjs.com/package/pi-better-math) |
 | [pi-tool-fold](packages/pi-tool-fold) | Fold completed tool calls in the transcript. | [MIT](packages/pi-tool-fold/LICENSE) | [![npm version](https://img.shields.io/npm/v/pi-tool-fold)](https://www.npmjs.com/package/pi-tool-fold) |
+| [pi-session-mentions](packages/pi-session-mentions) | Search and reference local Pi, Claude Code, and Codex sessions. | [MIT](packages/pi-session-mentions/LICENSE) | Not published |
 
 ## Install
 
@@ -33,6 +34,8 @@ pi install npm:pi-tool-fold
 ```
 
 See each package's README for configuration and usage.
+
+To use `pi-session-mentions` from this checkout, run `pi install ./packages/pi-session-mentions`.
 
 ## Development
 
@@ -65,4 +68,4 @@ Historical tags retain their original tag objects under namespaced refs and poin
 
 ## Licenses
 
-The [root MIT license](LICENSE) covers root tooling and documentation. Each package retains its own license: `pi-better-math` is GPL-3.0-or-later and depends on GPL-licensed `libtexprintf`; the other six packages are MIT licensed. Review the license and notices in each package before use or distribution.
+The [root MIT license](LICENSE) covers root tooling and documentation. Each package retains its own license: `pi-better-math` is GPL-3.0-or-later and depends on GPL-licensed `libtexprintf`; the other packages are MIT licensed. Review the license and notices in each package before use or distribution.
