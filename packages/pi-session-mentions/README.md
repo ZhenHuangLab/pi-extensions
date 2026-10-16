@@ -16,10 +16,10 @@ project, and date. File results keep their order.
 
 ## Install
 
-Requires Pi 1.2.0 or later and Node.js 22.19.0 or later. From this repository:
+Requires Pi 1.2.0 or later and Node.js 22.19.0 or later. Install from npm:
 
 ```sh
-pi install ./packages/pi-session-mentions
+pi install npm:pi-session-mentions
 ```
 
 Run `/reload` in an existing Pi session. This is a personal installation, so the

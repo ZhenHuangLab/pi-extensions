@@ -14,10 +14,10 @@
 
 ## 安装
 
-需要 Pi 1.2.0 或更高版本，以及 Node.js 22.19.0 或更高版本。在本仓库中执行：
+需要 Pi 1.2.0 或更高版本，以及 Node.js 22.19.0 或更高版本。通过 npm 安装：
 
 ```sh
-pi install ./packages/pi-session-mentions
+pi install npm:pi-session-mentions
 ```
 
 已有 Pi 会话执行 `/reload`。这是全局安装，所有项目都可使用。运行时只依赖

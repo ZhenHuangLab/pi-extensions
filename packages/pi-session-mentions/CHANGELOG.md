@@ -1,5 +1,11 @@
 # pi-session-mentions
 
+## 0.1.1
+
+### Patch Changes
+
+- Document installation from npm now that the package is published.
+
 ## 0.1.0
 
 ### Minor Changes
