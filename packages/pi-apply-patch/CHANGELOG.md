@@ -1,5 +1,11 @@
 # @zhenhuang/pi-apply-patch
 
+## 0.1.1
+
+### Patch Changes
+
+- Publish releases through GitHub Actions with npm Trusted Publishing after the initial registry bootstrap.
+
 ## 0.1.0
 
 ### Minor Changes
