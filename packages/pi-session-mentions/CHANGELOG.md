@@ -1,5 +1,11 @@
 # pi-session-mentions
 
+## 0.1.2
+
+### Patch Changes
+
+- Write exported session transcripts to `/tmp/pi-sessions-mentions/` instead of the agent cache directory. Document transcript regeneration and temporary file cleanup.
+
 ## 0.1.1
 
 ### Patch Changes

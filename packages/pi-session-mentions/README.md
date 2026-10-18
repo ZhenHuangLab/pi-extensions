@@ -78,15 +78,18 @@ changes during export must be selected again after its current write finishes.
 
 ## Local data
 
-The search cache and transcript snapshots live in
-`~/.pi/agent/session-mentions/`, or under `PI_CODING_AGENT_DIR`. They contain private
-conversation text and use private directory and file permissions. No data is sent
-to a separate search service. Referenced text can reach the model provider when
-the model reads it; this is not secret redaction.
+The search cache lives in `~/.pi/agent/session-mentions/`, or under
+`PI_CODING_AGENT_DIR`. Transcript snapshots are written to
+`/tmp/pi-sessions-mentions/`. Both contain private conversation text and use
+private directory and file permissions. No data is sent to a separate search
+service. Referenced text can reach the model provider when the model reads it;
+this is not secret redaction.
 
-Snapshots are retained so older references remain readable. Deleting this
-directory removes both the cache and the exported snapshots; old references will
-then stop working. Original sessions are never modified.
+Each submitted session reference generates a fresh transcript. Multiple references
+to the same session in one message share one snapshot. Deleting the search cache
+causes it to be rebuilt. Deleting the temporary snapshots, including during system
+cleanup, makes their paths in older messages unreadable. Selecting and sending a
+session again creates a new snapshot. Original sessions are never modified.
 
 ## Development
 

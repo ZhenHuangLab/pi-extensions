@@ -26,7 +26,7 @@ const roots = sourceRoots(options);
 const cacheDir = absolutePath(options.cacheDir);
 const scope = createHash('sha256').update(JSON.stringify(roots)).digest('hex').slice(0, 24);
 const indexPath = join(cacheDir, `index-${scope}.jsonl`);
-const exportDir = join(cacheDir, 'transcripts');
+const exportDir = '/tmp/pi-sessions-mentions';
 const REFRESH_INTERVAL = 15_000;
 const lifetime = new AbortController();
 /** @type {Map<string, CacheRecord>} */
