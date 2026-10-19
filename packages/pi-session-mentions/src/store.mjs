@@ -72,17 +72,24 @@ export class SessionStore {
   }
 
   /**
-   * Returns up to eight current matches, including during background indexing.
+   * Returns all ranked matches, including during background indexing.
+   * Loading covers initialization and the first uncached scan. Indexed counts
+   * visible sessions after excludePath, independent of the query and provider.
    * @param {string} query
    * @param {SearchOptions} options
-   * @returns {Promise<{sessions: SessionSummary[], loading: boolean}>}
+   * @returns {Promise<{sessions: SessionSummary[], loading: boolean, indexed: number}>}
    */
   async search(query, options) {
     if (typeof query !== 'string' || !options || typeof options.cwd !== 'string' ||
         (options.excludePath !== undefined && typeof options.excludePath !== 'string')) {
       throw new TypeError('Search requires a query and cwd.');
     }
-    return this.#request('search', { query, cwd: options.cwd, excludePath: options.excludePath }, options.signal);
+    if (options.provider !== undefined && !['pi', 'claude', 'codex'].includes(options.provider)) {
+      throw new TypeError('Invalid session provider.');
+    }
+    return this.#request('search', {
+      query, cwd: options.cwd, excludePath: options.excludePath, provider: options.provider,
+    }, options.signal);
   }
 
   /**

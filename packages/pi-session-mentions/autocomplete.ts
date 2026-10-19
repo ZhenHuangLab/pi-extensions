@@ -1,24 +1,42 @@
 import { basename } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
-import type { SessionStore } from "./src/store.mjs";
+import type { Provider, SessionStore } from "./src/store.mjs";
 import { oneLine, PROVIDER_LABELS, sessionMention } from "./mentions.ts";
 
 const SESSION_ENTRY: AutocompleteItem = {
   value: "@@",
   label: "@@  Sessions",
-  description: "Search local conversations",
+  description: "All sessions · @@cc: Claude Code · @@cx: Codex · @@pi: Pi",
 };
 
-function sessionQuery(text: string): { prefix: string; query: string } | undefined {
-  const match = /(?:^|[\s([{"'=，。！？；：（【、])(@@(?:"([^"\r\n]*)"?|([^\s@"`]*)))$/u.exec(text);
-  return match ? { prefix: match[1], query: match[2] ?? match[3] } : undefined;
+const SOURCES: { code: string; label: string; description: string; provider?: Provider }[] = [
+  { code: "all", label: "All sessions", description: "Pi · Claude Code · Codex" },
+  { code: "cc", label: "CC sessions", description: "Claude Code", provider: "claude" },
+  { code: "cx", label: "CX sessions", description: "Codex", provider: "codex" },
+  { code: "pi", label: "Pi sessions", description: "Pi", provider: "pi" },
+];
+
+function sessionQuery(text: string) {
+  const match = /(?:^|[\s([{"'=，。！？；：（【、])(@@(?:(all|cc|cx|pi|):)?(?:"([^"\r\n]*)"?|([^\s@"`]*)))$/iu.exec(text);
+  if (!match) return undefined;
+  const source = match[2]?.toLowerCase();
+  return {
+    prefix: match[1],
+    query: match[3] ?? match[4],
+    rawQuery: match[1].slice(2 + (source === undefined ? 0 : source.length + 1)),
+    source,
+    provider: SOURCES.find(({ code }) => code === source)?.provider,
+  };
 }
 
-function replacePrefix(lines: string[], line: number, col: number, prefix: string, value: string) {
+function replacePrefix(
+  lines: string[], line: number, col: number, prefix: string, value: string, removeClosingQuote = false,
+) {
   const next = [...lines];
   let suffix = lines[line].slice(col);
-  if (prefix.startsWith('@@"') && (prefix.length === 3 || !prefix.endsWith('"')) && suffix.startsWith('"')) {
+  const quote = prefix.indexOf('"');
+  if (removeClosingQuote && quote >= 0 && (prefix.length === quote + 1 || !prefix.endsWith('"')) && suffix.startsWith('"')) {
     suffix = suffix.slice(1);
   }
   next[line] = lines[line].slice(0, col - prefix.length) + value + suffix;
@@ -28,9 +46,15 @@ function replacePrefix(lines: string[], line: number, col: number, prefix: strin
 export function createSessionAutocomplete(
   current: AutocompleteProvider,
   store: SessionStore,
-  context: { cwd: string; excludePath?: string; notify: (message: string) => void },
+  context: {
+    cwd: string;
+    excludePath?: string;
+    notify: (message: string) => void;
+    setIndexing: (indexed: number | undefined) => void;
+  },
 ): AutocompleteProvider {
   const sessionItems = new WeakSet<AutocompleteItem>();
+  const sourceItems = new WeakSet<AutocompleteItem>();
   const notices = new WeakMap<AutocompleteItem, string>();
   return {
     triggerCharacters: [...new Set([...(current.triggerCharacters ?? []), "@"])],
@@ -47,16 +71,36 @@ export function createSessionAutocomplete(
         return { prefix: "@", items };
       }
 
+      const sources = SOURCES.filter(({ code }) => query.source === "" || (
+        query.source === undefined && query.query && !query.rawQuery.startsWith('"') &&
+        code.startsWith(query.query.toLowerCase())
+      )).map(({ code, label, description }): AutocompleteItem => {
+        const item = {
+          value: `@@${code}:${query.source === "" ? query.rawQuery : ""}`,
+          label,
+          description,
+        };
+        sourceItems.add(item);
+        return item;
+      });
+      if (query.source === "") return { prefix: query.prefix, items: sources };
+
+      let indexing = false;
       try {
-        const searchOptions = { cwd: context.cwd, excludePath: context.excludePath, signal: options.signal };
+        const searchOptions = {
+          cwd: context.cwd, excludePath: context.excludePath, provider: query.provider, signal: options.signal,
+        };
         let result = await store.search(query.query, searchOptions);
-        // Cold scans publish recent sessions first. Await initial matches without blocking typing.
-        while (result.loading && result.sessions.length === 0) {
+        // Pi takes one suggestion snapshot per request. Wait for the initial scan
+        // so a partial list and its loading notice cannot remain on screen.
+        while (result.loading) {
+          indexing = true;
+          context.setIndexing(result.indexed);
           await delay(100, undefined, { signal: options.signal });
           result = await store.search(query.query, searchOptions);
         }
         if (options.signal.aborted) return null;
-        const items = result.sessions.slice(0, result.loading ? 7 : 8).map((session): AutocompleteItem => {
+        const items = result.sessions.map((session): AutocompleteItem => {
           const modified = new Date(session.modified);
           const date = Number.isFinite(modified.getTime()) ? modified.toISOString().slice(0, 10) : "";
           const project = oneLine(basename(session.cwd) || session.cwd, 32);
@@ -68,12 +112,13 @@ export function createSessionAutocomplete(
           sessionItems.add(item);
           return item;
         });
-        if (result.loading) {
-          const notice = { value: "", label: "Indexing sessions…" };
-          notices.set(notice, "Sessions are still being indexed.");
-          items.push(notice);
-        } else if (!items.length) {
-          const notice = { value: "", label: "No matching sessions" };
+        items.unshift(...sources);
+        if (!items.length) {
+          const notice = {
+            value: "",
+            label: "No matching sessions",
+            description: "Sources: @@all: · @@cc: · @@cx: · @@pi:",
+          };
           notices.set(notice, notice.label);
           items.push(notice);
         }
@@ -84,18 +129,21 @@ export function createSessionAutocomplete(
         const reason = oneLine(error instanceof Error ? error.message : String(error), 160);
         notices.set(notice, `${notice.label}: ${reason}`);
         return { prefix: query.prefix, items: [notice] };
+      } finally {
+        if (indexing) context.setIndexing(undefined);
       }
     },
 
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       if (item === SESSION_ENTRY) return replacePrefix(lines, cursorLine, cursorCol, prefix, "@@");
+      if (sourceItems.has(item)) return replacePrefix(lines, cursorLine, cursorCol, prefix, item.value);
       const notice = notices.get(item);
       if (notice) {
         context.notify(notice);
         return { lines, cursorLine, cursorCol };
       }
       if (sessionItems.has(item)) {
-        return replacePrefix(lines, cursorLine, cursorCol, prefix, `${item.value} `);
+        return replacePrefix(lines, cursorLine, cursorCol, prefix, `${item.value} `, true);
       }
       return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
     },

@@ -5,7 +5,7 @@ export type { Provider, SearchOptions, SessionExport, SessionSummary, StoreOptio
 export class SessionStore {
   constructor(options: StoreOptions);
   start(): void;
-  search(query: string, options: SearchOptions): Promise<{ sessions: SessionSummary[]; loading: boolean }>;
+  search(query: string, options: SearchOptions): Promise<{ sessions: SessionSummary[]; loading: boolean; indexed: number }>;
   exportSession(key: string, options?: { signal?: AbortSignal }): Promise<SessionExport>;
   close(): Promise<void>;
 }

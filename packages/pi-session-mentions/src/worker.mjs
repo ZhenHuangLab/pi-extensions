@@ -38,6 +38,7 @@ let titleStamp = null;
 /** @type {Promise<void> | null} */
 let refreshing = null;
 let initialized = false;
+let loading = true;
 let nextRefresh = 0;
 let closing = false;
 /** @type {Error | null} */
@@ -220,6 +221,7 @@ function requestRefresh(force = false) {
   refreshing = refresh().catch((error) => {
     if (!lifetime.signal.aborted) report(error);
   }).finally(() => {
+    loading = false;
     refreshing = null;
     nextRefresh = Date.now() + REFRESH_INTERVAL;
   });
@@ -228,7 +230,10 @@ function requestRefresh(force = false) {
 async function initialize() {
   try {
     await privateDirectory(cacheDir);
-    try { await loadIndex(); } catch (error) {
+    try {
+      await loadIndex();
+      loading = false;
+    } catch (error) {
       throwIfAborted(lifetime.signal);
       if (!missing(error)) report(new Error(`Session index could not be reused and will be rebuilt: ${asError(error).message}`));
     }
@@ -237,6 +242,7 @@ async function initialize() {
   } catch (error) {
     if (!lifetime.signal.aborted) fatal = asError(error);
     initialized = true;
+    loading = false;
   }
 }
 const initialization = initialize();
@@ -273,8 +279,15 @@ function matchScore(summary, entry, words) {
   return titleMatches * (words.length * 2 + 1) + otherMatches;
 }
 
-/** @param {string} query @param {string} cwd @param {string | undefined} excludePath @param {AbortSignal} signal */
-async function search(query, cwd, excludePath, signal) {
+/**
+ * @param {string} query
+ * @param {string} cwd
+ * @param {string | undefined} excludePath
+ * @param {Provider | undefined} provider
+ * @param {AbortSignal} signal
+ * @returns {Promise<{sessions: SessionSummary[], loading: boolean, indexed: number}>}
+ */
+async function search(query, cwd, excludePath, provider, signal) {
   checkErrors();
   requestRefresh();
   const words = [...new Set(fold(query).trim().split(/\s+/u).filter(Boolean))];
@@ -282,24 +295,26 @@ async function search(query, cwd, excludePath, signal) {
   const excluded = excludePath ? absolutePath(excludePath) : '';
   /** @type {{summary: SessionSummary, score: number, local: boolean}[]} */
   const matches = [];
-  let count = 0;
+  let indexed = 0;
   for (const entry of entries.values()) {
     throwIfAborted(signal);
     const summary = entry.summary;
     if (!summary || summary.path === excluded) continue;
-    const score = matchScore(summary, entry, words);
-    if (score >= 0) {
-      matches.push({ summary, score, local: !!summary.cwd && absolutePath(summary.cwd) === currentCwd });
+    indexed++;
+    if (provider === undefined || summary.provider === provider) {
+      const score = matchScore(summary, entry, words);
+      if (score >= 0) {
+        matches.push({ summary, score, local: !!summary.cwd && absolutePath(summary.cwd) === currentCwd });
+      }
     }
-    if (++count % 128 === 0) await yieldThread();
+    if (indexed % 128 === 0) await yieldThread();
   }
   matches.sort((a, b) => b.score - a.score || Number(b.local) - Number(a.local) ||
     b.summary.modified - a.summary.modified || a.summary.key.localeCompare(b.summary.key));
-  const sessions = matches.slice(0, 8).map(({ summary }) => summary);
+  const sessions = matches.map(({ summary }) => summary);
   throwIfAborted(signal);
-  const loading = !initialized || refreshing !== null;
   if (!loading && sessions.length === 0) checkErrors(true);
-  return { sessions, loading };
+  return { sessions, loading, indexed };
 }
 
 /** @param {SessionSummary} summary @param {import('./model.mjs').Message[]} messages @param {boolean} incomplete */
@@ -357,8 +372,9 @@ port.on('message', (message) => {
   const task = (async () => {
     try {
       let result;
-      if (message.type === 'search' && typeof message.query === 'string' && typeof message.cwd === 'string') {
-        result = await search(message.query, message.cwd, message.excludePath, controller.signal);
+      if (message.type === 'search' && typeof message.query === 'string' && typeof message.cwd === 'string' &&
+          (message.provider === undefined || ['pi', 'claude', 'codex'].includes(message.provider))) {
+        result = await search(message.query, message.cwd, message.excludePath, message.provider, controller.signal);
       } else if (message.type === 'export' && typeof message.key === 'string' && /^[a-f0-9]{24}$/.test(message.key)) {
         result = await exportSession(message.key, controller.signal);
       } else {

@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
  * @typedef {object} SearchOptions
  * @property {string} cwd
  * @property {string} [excludePath]
+ * @property {Provider} [provider] Limit matches to this provider.
  * @property {AbortSignal} [signal]
  */
 /**

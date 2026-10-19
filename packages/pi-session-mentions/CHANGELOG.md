@@ -1,5 +1,14 @@
 # pi-session-mentions
 
+## 0.2.0
+
+### Minor Changes
+
+- Return all matching sessions in the scrollable completion list instead of limiting results to eight.
+- Add `@@all:`, `@@cc:`, `@@cx:`, and `@@pi:` source filters, with a four-option menu at `@@:`.
+- Show initial indexing progress until the scan finishes. Clear the status on completion and keep later background refreshes from displaying a stale loading notice.
+- Document source selection, indexing costs, and memory use in the English and Chinese READMEs.
+
 ## 0.1.2
 
 ### Patch Changes

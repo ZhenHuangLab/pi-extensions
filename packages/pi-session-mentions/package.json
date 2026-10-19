@@ -1,6 +1,6 @@
 {
   "name": "pi-session-mentions",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Search and reference local Pi, Claude Code, and Codex conversations from Pi.",
   "keywords": ["pi-package", "pi-extension", "sessions", "context", "autocomplete"],
   "homepage": "https://github.com/ZhenHuangLab/pi-extensions/tree/main/packages/pi-session-mentions#readme",

@@ -17,6 +17,7 @@ export default function sessionMentions(pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    if (ctx.hasUI) ctx.ui.setStatus("session-mentions", undefined);
     const previousStore = store;
     store = undefined;
     await previousStore?.close();
@@ -28,6 +29,11 @@ export default function sessionMentions(pi: ExtensionAPI): void {
           cwd: ctx.cwd,
           excludePath: ctx.sessionManager.getSessionFile(),
           notify: (message) => ctx.ui.notify(message, "info"),
+          setIndexing: (indexed) => {
+            if (activeStore === store) {
+              ctx.ui.setStatus("session-mentions", indexed === undefined ? undefined : `Indexing sessions… ${indexed}`);
+            }
+          },
         }),
       );
     }
@@ -52,7 +58,8 @@ export default function sessionMentions(pi: ExtensionAPI): void {
     return { action: "transform", text: result.text, images: event.images };
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    if (ctx.hasUI) ctx.ui.setStatus("session-mentions", undefined);
     const activeStore = store;
     store = undefined;
     await activeStore?.close();

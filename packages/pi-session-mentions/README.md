@@ -11,8 +11,8 @@ keywords, use quotes: `@@"build cache"`.
 It adds model context only when you send a selected reference.
 
 The ordinary `@` file menu has one **Sessions** entry that inserts `@@`. Session
-results have their own menu, with up to eight rows showing the title, agent,
-project, and date. File results keep their order.
+results have their own menu showing the title, agent, project, and date. Use the
+arrow keys to scroll through all matches. File results keep their order.
 
 ## Install
 
@@ -28,6 +28,20 @@ Node.js, and does not require `ah`.
 
 ## Search
 
+Use a short prefix to choose a source:
+
+| Prefix | Sessions |
+| --- | --- |
+| `@@` or `@@all:` | All sources |
+| `@@cc:` | Claude Code |
+| `@@cx:` | Codex |
+| `@@pi:` | Pi |
+
+Type a keyword after the prefix, for example `@@cx:cache` or
+`@@cc:"build cache"`. Type `@@:` to choose All, CC, CX, or Pi from a small menu.
+Tab or Enter inserts the source prefix; then type a keyword or press Tab to
+browse its sessions. Typing `@@c` also suggests CC and CX.
+
 Search matches titles, user messages, project paths, and session IDs. Matching
 ignores case and supports Chinese text. All query words must match. Title matches
 come first, followed by the current project and recent activity. The current
@@ -36,10 +50,17 @@ session and subagent sessions are excluded.
 Assistant messages, tool output, and thinking are not indexed. This keeps the
 index smaller and avoids matches on generated text.
 
-The index loads in a background worker and caches unchanged files. Typing searches
-the in-memory index. Files refresh periodically when you search, rather than on
-each keystroke. The first scan can take time for a large history; recent sessions
-become available as they are indexed. There are no model calls or embeddings.
+The index loads in a background worker and caches unchanged files. During the
+first scan, the status line shows the number of indexed sessions. Results appear
+when that scan finishes, and the status clears. You can keep typing while it
+runs. A complete cache makes results available as soon as it loads. Later file
+refreshes run in the background, at most once every 15 seconds when you search.
+Typing searches the in-memory index. There are no model calls or embeddings.
+
+Search time depends on the indexed text and the number of returned matches.
+The worker keeps user text in memory, so memory use grows with your history.
+An uncached first scan also reads the source files. Changing or closing the Pi
+session stops the worker and releases its index.
 
 | Agent | Default session location | Environment override |
 | --- | --- | --- |
