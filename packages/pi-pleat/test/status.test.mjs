@@ -87,7 +87,7 @@ test("status reports unknown usage and unavailable replay without claiming a suc
   const manager = SessionManager.inMemory();
   assert.ok(format(manager, { usage: { tokens: null, contextWindow: 20000, percent: null }, raw: undefined }).includes("Context: unknown of 20000 tokens · raw unknown (Anthropic)"));
   assert.ok(format(manager, { raw: { tokens: 1000, estimated: true } }).includes("(5.0%), estimated"));
-  assert.ok(format(manager, { model: undefined, limits: undefined, usage: undefined, raw: undefined }).startsWith("pi-pleat · no physical model selected\nContext: unknown of unknown tokens\nClearing: off"));
+  assert.ok(format(manager, { model: undefined, limits: undefined, usage: undefined, raw: undefined }).startsWith("pi-pleat · no physical model selected\nContext: unknown of unknown tokens\nCompaction route: unavailable"));
   manager.appendCustomEntry(CAPABILITY_ENTRY, { key: channelKey(channelOf(model)), feature: "clearing", status: "unsupported", reason: "unsupported" });
   assert.ok(format(manager).includes("Clearing: off"));
 });

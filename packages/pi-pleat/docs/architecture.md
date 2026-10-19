@@ -9,13 +9,13 @@
 
 ## 1. 产品范围
 
-pi-pleat 管理当前会话的上下文大小和压缩过程。Anthropic 使用服务端清理，其他通道默认保留
-工具结果，达到阈值时压缩历史。原始工具输出和已压缩的对话正文可以按需召回。thinking 默认保留，
+pi-pleat 管理当前会话的上下文大小和压缩过程。Anthropic 使用服务端清理，其他通道达到可配置
+阈值时后台压缩历史，前台继续工作。原始工具输出和已压缩的对话正文可以按需召回。thinking 默认保留，
 由支持的原生压缩方法处理被摘要范围内的推理。
 
-首版使用 Pi 的会话树、压缩条目和 `context_edit`。模型只获得一个 `recall` 工具；
+插件使用 Pi 的会话树和压缩条目。模型只获得一个 `recall` 工具；
 用户通过 `/context` 查看状态，通过 `/context fallback` 为当前会话切换回退摘要模型。首版不加入
-跨会话记忆、数据库、语义索引或后台压缩。
+跨会话记忆、数据库或语义索引。
 
 插件与其他修改历史或接管压缩的扩展互斥。只在首次发送前改写工具结果的扩展可以共存。
 Pi 1.2.0 把 `tool_result` 和 `message_end` 改写后的结果写入 JSONL，模型看到的也是这个版本
@@ -33,11 +33,11 @@ Pi 1.2.0 把 `tool_result` 和 `message_end` 改写后的结果写入 JSONL，�
 ### 设计原则
 
 1. Anthropic 优先适配 preserved thinking。会话内 `system` 和 `tools` 保持不变，客户端不修改已经发送的消息。旧工具结果只由服务端清理；取回内容作为新的工具结果追加。
-2. 上下文管理优先使用官方原生方法：Anthropic 服务端清理和按需压缩、两个 OpenAI Responses 通道和显式配置的自定义通道使用的 Codex 官方客户端 Responses-trigger，以及 Pi 的 `context_edit` 和压缩条目。插件代码只处理这些方法没有覆盖的部分：召回、非 Anthropic 通道的清理选择，以及 Pi 尚未支持的原生压缩响应和回放。
-3. 保留原文并按需召回。清理或压缩后，原始记录仍保存在会话分支中。非 Anthropic 的本地清理默认关闭，显式启用时按简单、可预测的顺序进行（第 8 节）。
+2. 上下文管理优先使用官方原生方法：Anthropic 服务端清理和按需压缩、两个 OpenAI Responses 通道和显式配置的自定义通道使用的 Codex 官方客户端 Responses-trigger，以及 Pi 的 `context_edit` 和压缩条目。插件代码只处理这些方法没有覆盖的部分：召回、后台压缩协调，以及 Pi 尚未支持的原生压缩响应和回放。
+3. 保留原文并按需召回。清理或压缩后，原始记录仍保存在会话分支中。后台压缩只替换捕获的连续前缀，完整保留之后新增的消息。
 4. thinking 最后才压缩。客户端从不删除 thinking，`clear_thinking_20251015` 使用 `keep: "all"`；达到压缩阈值后，才由原生压缩处理被摘要范围内的推理。
 5. 模型可见的内容尽量少，高效利用 token，遵循 SOTA 的 prompt engineering/context engineering 实践。模型只看到一个 `recall` 工具，插件不向系统提示添加内容；发给模型的文字固定，不含时间戳或计数器。状态和统计只在 `/context` 中给用户看。
-6. 轻量，开箱即用。阈值由模型窗口和 Pi 的 `compaction` 设置得出，清理参数使用默认值，也可通过 `pi-pleat.clearing` 设置；回退摘要的模型和 thinking 级别同样可选，可以在对话中用 `/context fallback` 为当前会话切换。
+6. 轻量，开箱即用。阈值由模型窗口和 Pi 的 `compaction` 设置得出；非 Anthropic 的后台触发比例用 `pi-pleat.asyncCompaction` 设置，Anthropic 服务端清理用 `pi-pleat.clearing` 设置；回退摘要的模型和 thinking 级别同样可选，可以在对话中用 `/context fallback` 为当前会话切换。
 7. 回退摘要可以使用指定模型。原生压缩始终使用会话模型，使保留轮次的 thinking 继续有效。
 
 保留 thinking 的依据来自模型厂商的测试。MiniMax 对 M2 的测试中，保留前几轮 thinking 后，
@@ -49,7 +49,7 @@ Anthropic 在多轮编程测试中发现，max 强度下每个会话丢弃一次
 
 ### 不变约束
 
-1. 已保存的原始条目保持不变。客户端清理通过追加 `context_edit` 表达。
+1. 已保存的原始条目保持不变；压缩只增加新的压缩条目。
 2. `tool_use` 与对应结果共同保留；一批工具结果未齐全时不压缩。
 3. 压缩输出覆盖的范围和保留范围必须连续，不能漏掉或重复消息。
 4. 只有完整、成功且仍适用于当前会话状态的压缩结果可以提交。
@@ -62,9 +62,9 @@ Anthropic 在多轮编程测试中发现，max 强度下每个会话丢弃一次
 | --- | --- | --- |
 | `src/index.ts` | 注册 `recall` 和 `/context`；接入 Pi 事件；装配模块；去重的提示和最近诊断 | 直接发送模型请求 |
 | `src/session.ts` | 通道标识；能力记录和回退覆盖条目；压缩 details 格式与校验；覆盖范围；工具结果记录 | 选择清理策略 |
-| `src/budget.ts` | 由模型窗口和 Pi `compaction` 设置计算阈值；清理设置校验和 4,096 安全 tokens；Anthropic 清理前大小；用量统计与保守的 applied_edits 归属 | 修改消息 |
+| `src/budget.ts` | Pi 硬阈值、后台触发比例和 Anthropic 清理设置；4,096 安全 tokens；Anthropic 清理前大小；用量统计与 applied_edits 归属 | 修改消息 |
 | `src/recall.ts` | 当前分支按 ID 或查询取回；超长结果写临时文件；检查输出文件引用 | 原位恢复历史、重跑命令 |
-| `src/edits.ts` | 非 Anthropic 通道的批量 `context_edit` 草案与占位文字 | 修改 JSONL 或 thinking |
+| `src/async.ts` | 后台任务、快照有效性、取消、结果采用与硬阈值等待 | 直接发送服务商协议请求 |
 | `src/requests.ts` | 请求快照与回复条目的绑定；原生状态回放的校验与拼接 | 决定何时压缩 |
 | `src/compact.ts` | 唯一压缩协调器：选择方法、重试、状态检查、能力记录、回退 | 自己写入压缩条目 |
 | `src/fallback.ts` | 解析回退摘要模型；生成 Pi 格式文本摘要（必要时分块）；Anthropic `turn_end` 回退的切点 | 擅自切换到未配置的服务商 |
@@ -108,7 +108,7 @@ Pi 会话条目保留原始消息和分支关系，原文只存在于 Pi JSONL�
 （第 7.3 节），`pi-pleat.fallback` 保存 `/context fallback` 的会话覆盖。两类条目都只从当前分支读取，
 同一键以分支上最新的有效条目为准，重启后仍然有效。
 
-请求快照、回复用量、清理和回退计数、最近 5 条诊断只在内存中，`session_start` 和
+请求快照、后台任务、未采用压缩请求的用量、回复用量、清理和回退计数、最近 5 条诊断只在内存中，`session_start` 和
 `session_shutdown` 时清空。超长召回结果使用的临时文件每次从 JSONL 重新生成，不属于会话存储。
 
 ### 4.3 压缩记录
@@ -129,43 +129,33 @@ pi-pleat 写入的压缩条目 `details`：
 压缩条目的 `summary`：Anthropic 为签名块中的摘要文字；Responses 为回退摘要模型并行生成的可读摘要；
 `pi-summary` 为文本摘要。`usage` 记录压缩请求的已知用量，Responses 为原生请求与可读摘要之和；
 服务商没有报告的部分不补零。`details` 形状校验失败的条目按普通 Pi 摘要处理，不回放。不保存认证头。
+已完成但未采用的请求在 `/context` 另一行显示当前会话的用量，不计入已采用的压缩记录，避免重复计算。
 
 重启只从当前分支重建状态。回放只读取分支上最新的压缩条目，不选择其他分支的压缩块，
 也不在最新压缩失效后回放更旧的块。
 
 ## 5. 运行流程与提交
 
-```text
-before_provider_request
-  → 校验并回放当前分支最新压缩条目的原生状态
-  → Anthropic：加入服务端清理配置
-  → 记录最终请求快照
-message_end → turn_end
-  → 把快照绑定到成功回复的 assistant 条目
-  → Anthropic：清理前大小超过阈值时，返回 compaction 草案
-  → 其他通道：显式启用本地清理且超过触发点时，返回一批 context_edit 草案
-session_before_compact（Pi 阈值、/compact、溢出恢复）
-  → 同一协调器：原生压缩、文本摘要、交回 Pi 或取消
-agent_before_settle
-  → 清理不受支持时的一次恢复（第 7.1 节）
-```
+`before_provider_request` 校验原生回放并记录最终请求；Anthropic 同时加入服务端清理配置。
+非 Anthropic 在请求边界和成功的 `turn_end` 检查后台触发点。上下文达到阈值且存在可压缩前缀时，
+捕获分支和压缩准备数据并启动后台请求。普通事件处理器立即返回，前台可以继续生成和调用工具。
 
-Anthropic 运行中的主动压缩使用 `turn_end` 返回 `compaction` 草案。不得在这里调用 `ctx.compact()`：
-Pi 1.2.0 的该入口会先中止当前运行，且不会自动恢复它。`turn_end` 只在本轮 `outcome` 为 `completed`、
-且 `compaction.enabled` 不为 false 时压缩。
+后台任务处理固定快照，使用 Pi 的切点保留近期历史。任务只允许当前分支在快照之后追加消息；
+会话、模型、分支切换，以及上下文编辑、另一条压缩或系统设置变化都会使候选失效。
+每次网络请求后检查有效性，失效后取消任务，停止重试和回退。提交时再次核对覆盖前缀、完整工具批次，
+并用当前后缀重新检查窗口预算。原始消息保存在分支中，供 `recall` 检索。
 
-手动 `/compact`、Pi 自动阈值压缩和溢出恢复通过 `session_before_compact` 调用同一个协调器。
-协调器本身不写压缩条目；`turn_end` 和 `session_before_compact` 各自返回一次结果，避免重复提交或递归。
-`session_before_compact` 的结果有三种：返回 `compaction`；不返回，由 Pi 用会话模型做默认压缩；
-返回 `cancel: true` 并提示原因。处理 Pi 的手动压缩时遵守其停止当前任务的既有语义。
+就绪结果通过安全边界的条目草案提交，`firstKeptEntryId` 始终指向捕获时的保留切点，因此请求期间
+新增的全部消息和工具结果继续保留。同一扩展实例只有一个后台任务，同一有效前缀的失败请求不会在
+每一轮重复启动。关闭会话时取消并等待后台任务结束。
 
-协调器状态为 `idle → preparing → requesting → validating → idle`。同一扩展实例的压缩操作串行执行，
-新的操作等待前一个结束。开始时记录会话 ID、分支叶节点和通道；每次服务商请求之后、返回结果之前
-重新检查它们和取消信号。取消、切换会话/分支/模型或叶节点变化使候选结果失效：丢弃结果，
-不重试，不进入回退，保持原有有效状态。压缩期间状态栏显示 `compacting…`。
+`session_before_compact` 负责 Pi 硬阈值、溢出恢复和手动 `/compact`。硬阈值优先等待仍有效的后台任务；
+其结果无法给当前后缀留下足够空间时，重新捕获当前历史做前台压缩。手动请求取消后台候选并从当前
+历史开始，遵守自定义说明。`compaction.enabled: false` 关闭自动和后台压缩。
 
-首版采用同步边界压缩。新消息的排队和继续执行交给 Pi；不自行启动另一个 agent。`turn_end`
-从不请求 `continue`；唯一的 `continue` 来自清理不受支持时的一次恢复。
+Anthropic 保持同步边界压缩：成功的 `turn_end` 在清理前大小超过 T 时调用协调器，返回一次
+`compaction` 草案。这里不调用会中止任务的 `ctx.compact()`。`agent_before_settle` 只处理
+Anthropic 清理不受支持时的一次恢复。前台压缩仍严格检查叶节点，后台压缩另行校验捕获的前缀。
 
 ## 6. 请求边界与回放
 
@@ -281,7 +271,7 @@ provider/API 字符串；无效项或含未知字段的项警告并忽略，其�
 已注册的适配器、端点与认证；适配器需支持 Responses 请求形状、`onPayload` 和捕获 `fetch`。
 原生状态仍受 provider、API、endpoint、model 四项绑定约束。
 
-Responses-trigger 只在 `session_before_compact` 中运行，`turn_end` 不发送。当前通道的
+Responses-trigger 用于后台请求和 `session_before_compact` 的前台请求。当前通道的
 responses-trigger 能力记录为不支持，或 `/compact` 带自定义说明时（该协议无法携带说明，原因记为
 `custom-instructions`），本次改用文本摘要。
 
@@ -312,26 +302,10 @@ responses-trigger 能力记录为不支持，或 `/compact` 带自定义说明�
 为不支持；401、403 和其他 4xx 为无效；429、5xx 和读取过程中的网络失败为暂时失败。HTTP 200 时先校验
 完整原始流，完成后的多余事件或格式错误总是无效。
 
-Codex 官方客户端在 2026-10-13 加入了后台压缩（[参考资料](references.md#codex-后台压缩)）。开启
-`AsyncCompaction` 且活动上下文达到窗口的 `async_compaction_threshold_percent` 时，它在回合前、回合中、
-回合后的检查点对捕获的历史发出压缩请求，并在之后的检查点采用已就绪的结果：采用前校验历史代数、
-前缀长度、模型和认证所有者，只替换捕获的前缀，保留之后追加的消息和工具输出；采用后仍超过上限时
-再做一次前台压缩。TokenBudget 开启时该功能关闭；同一历史版本、模型、压缩哈希和认证所有者只发一次。
-请求协议没有变化：仍是带捕获历史和 `compaction_trigger` 的 Responses 请求，恰好一个 compaction 项，
-保留规则相同。前缀的安装形状（压缩前缀加捕获之后追加的项目）也与 pi-pleat 在 Responses 通道使用的
-形状（Pi 切点之前的前缀加保留后缀）相同，所以 v0.1.0 与之协议兼容。pi-pleat v0.1.0 按设计只做同步
-压缩（第 1 节），后台压缩列在[路线图](roadmap.md)中。
-
-本次另核对 upstream `89461ea6833832b0551ce24ee32205824d5c108d`（2026-10-19）的实现。
-后台任务处理固定的历史快照，前台继续生成；安装结果时替换该快照覆盖的前缀，并保留捕获后追加的
-完整后缀。达到硬阈值时可等待已启动的任务，安装后仍超预算则再做一次前台压缩。后台请求的已完成
-用量单独记账，即使候选后来被丢弃；会话关闭时取消网络任务并等待结算。源码链接见
-[Codex 后台压缩](references.md#codex-后台压缩)。
-
-Pi 1.2.0 的 `turn_end` 可以提交 `compaction` 草案，并通过 `firstKeptEntryId` 保留后缀；null 表示
-不保留之前的条目。当前协调器要求请求期间叶节点不变，后台压缩需另行验证捕获前缀、允许后续正常追加，
-并在消息边界提交。后台任务和前台请求的用量、取消与状态检查也需独立处理；此处记录实现条件，
-当前插件仍使用同步压缩。
+Codex 官方客户端的后台压缩仍使用相同的 Responses-trigger 协议：处理固定历史快照，前台继续
+生成，随后校验并替换快照覆盖的前缀，保留新增后缀；硬阈值负责等待或前台压缩。2026-10-19 核对的
+upstream 为 `89461ea6833832b0551ce24ee32205824d5c108d`，源码见
+[Codex 后台压缩](references.md#codex-后台压缩)。pi-pleat 的任务和提交机制见第 5 节。
 
 ### 7.3 能力记录与通道切换
 
@@ -347,9 +321,8 @@ Responses 为压缩时生成的可读摘要。客户端不删除原始 thinking�
 
 ### 7.4 其他服务商
 
-没有加入 Responses-trigger 配置的其他通道使用文本压缩。默认保留工具结果，显式启用本地清理时使用
-`context_edit`（第 8.1 节）。Pi 阈值或 `/compact` 触发压缩时，
-配置了回退摘要模型则由插件生成文本摘要，否则交回 Pi 用会话模型压缩。
+未配置 Responses-trigger 的通道使用后台文本摘要，采用配置的回退模型；未配置时使用会话模型。
+原生压缩不受支持或可恢复失败时也使用这条摘要路径。手动和 Pi 自动压缩继续通过同一协调器处理。
 
 ### 7.5 Pi 1.2.0 的限制
 
@@ -369,44 +342,15 @@ Anthropic 的 preserved thinking 规定，客户端清空或缩短已发送的 `
 全部 thinking 失效。官方建议在首次发送前缩短结果，以后的清理交给服务端。因此工具结果的
 长度只在首次发送前限制（见 4.1），发送后的空间由清理和召回释放。
 
-### 8.1 清理规则
+### 8.1 Anthropic 服务端清理
 
-Anthropic 默认使用服务端清理；其他通道的本地清理默认关闭，需设置 `pi-pleat.clearing.localEnabled: true`
-或匹配的模型覆盖才能启用。启用后使用同一顺序：上下文超过触发点后，从最早的工具结果开始清理，保留最近 K 次
-工具调用，保留全部调用参数；一批达不到释放下限时不清理。K、触发点、释放下限和最小清理大小
-可通过 `pi-pleat.clearing` 设置，默认值见第 9 节。
+上下文超过触发点后，Anthropic 从最早的工具结果开始清理，保留最近 K 次工具调用及其参数，
+每批至少释放设置的 tokens。`clear_tool_uses_20250919` 的 `trigger`、`keep` 和 `clear_at_least`
+分别对应触发点、K 和释放下限；`clear_tool_inputs: false` 保留调用参数。客户端保持原消息完整。
 
-Anthropic 由服务端执行这个规则。`clear_tool_uses_20250919` 的 `trigger`、`keep` 和
-`clear_at_least` 分别对应触发点、K 和释放下限，`clear_tool_inputs: false` 保留调用参数。
-服务端只按时间顺序选择，小结果也会被清理。客户端不能改为按大小或用途选择，因为客户端修改
-会使之后的 thinking 失效。Anthropic 通道不做本地清理。
-
-其他服务商显式启用本地清理后，由 pi-pleat 在 `turn_end` 追加一批 `context_edit`。上下文大小取 Pi 的
-`getContextUsage().tokens`，未知时不清理。候选是当前投影中的顶层工具结果，从旧到新排列，排除
-已被 `context_edit` 指向的条目、最近 K 次工具调用的结果、小于最小清理大小（默认 1 KB）的结果（文字按 UTF-8 字节，
-图片按 base64 长度），以及分支上位于最后一个 Claude thinking assistant 之前的结果：修改它们会在
-切回 Claude 时使之后的 thinking 失效。替换小结果省不了多少空间，却让模型失去内容。按顺序累计
-节省的估算 tokens，达到释放下限即提交这一批；全部候选也达不到下限时不清理。
-
-占位文字只由结果大小（Pi 的 `formatSize`）和召回 ID（Pi 条目 ID）决定，例如
-`[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`。
-
-### 8.2 判断结果是否还有用
-
-清理时不逐个判断结果的用途，这个判断在召回时由模型完成。模型调用 `recall` 时知道自己需要
-什么；清理时判断则要预测以后的需要。召回依赖模型察觉内容缺失，清理还可能重写提示缓存，
-因此需要同时评估信息保留、召回次数和总费用。
-
-让模型自己选择清理目标，需要在每次请求中加入工具说明和结果 ID，每次选择多一轮调用，
-并在不确定的时间改变前缀、重写缓存。用 Jev 这类分类模型逐个判断（扩展通过
-`ctx.modelRegistry.classify()` 调用），需要用户另外配置分类模型服务商的凭据，要把会话内容
-发给另一家服务商，每次判断增加延迟，结果也难以复现。在 Anthropic 上，这两种方式都只能
-通过客户端修改生效，会使之后的 thinking 失效。
-
-可选清理策略的研究依据来自 SWE-agent 和 SWE-bench Verified：只屏蔽较早观察结果的方法
-比原始代理费用减半，解决率与 LLM 摘要相当，有时略高（[The Complexity Trap](references.md#研究报告)）。
-阶段 6 统计清理后不久又被召回的结果。比例高时先调整 K 和触发点；仍不够时，再为非 Anthropic
-通道评估分类模型。
+参数位于 `pi-pleat.clearing`，默认触发点 0.5T、释放下限 0.1T、K 为 8。
+清理按服务端顺序执行，信息是否需要恢复由模型在调用 `recall` 时判断。效果评估应记录召回次数、
+信息保留和总费用，包括提示缓存重写的费用。
 
 ### 8.3 召回工具
 
@@ -423,7 +367,7 @@ Get original tool results or text from compacted user/assistant messages on this
 Pass `id` (entry or tool call ID), or `query` (command, path, tool name, or text) for the newest match.
 ```
 
-两个参数必须二选一。`id` 依次匹配 Pi 条目 ID（即占位文字中的召回 ID）、工具调用 ID、工具调用 ID
+两个参数必须二选一。`id` 依次匹配 Pi 条目 ID、工具调用 ID、工具调用 ID
 中 `|` 之前的部分。已压缩的用户或 assistant 正文也接受其条目 ID。`query` 在当前分支的工具名、
 调用参数、结果文本，以及已压缩消息的角色和可见正文中匹配：整条查询（小写、合并空白）
 是子串，或每个词都出现。以前的召回结果不参与查询。返回最新一条匹配，末尾用一行列出其他匹配的 ID
@@ -463,24 +407,18 @@ Anthropic 在 `turn_end` 自行触发压缩。服务端清理后的用量会低�
 `cleared_input_tokens`；只在 Pi 仍使用该回复的用量时相加，即其后没有 `context_edit` 或压缩条目。
 applied_edits 只在能确定属于该回复时才计入：同时打开的流、缺少 ID 的流、预热留下的未结束流和无法
 对应的 `message_stop` 都使归属变为未知。归属未知或没有该回复的统计时，触发值改用当前投影全部消息的
-估算值，并标记为估算。该值超过 T 时压缩。其他通道由 Pi 的阈值触发 `session_before_compact`。
+估算值，并标记为估算。该值超过 T 时压缩。其他通道先在后台阈值启动任务，由 Pi 的硬阈值触发 `session_before_compact` 等待或前台处理。
 缺少服务端统计时 `/context` 标记“估算”，不能把缺失值当零。
 
-非 Anthropic 通道的本地清理默认关闭。`pi-pleat.clearing.localEnabled` 为布尔值，默认 `false`，
-可按模型覆盖，Anthropic 忽略此项并使用服务端清理。清理触发点 0.5T、释放下限 0.1T、
-保留最近 8 次工具调用（K）和最小清理大小 1 KB 是其他清理参数的默认值，可通过其 `modelOverrides` 按模型覆盖，由阶段 6 的对照结果评估和调整。
-`triggerRatio` 接受大于 0 且不超过 1 的有限数，`floorRatio` 接受不小于 0 且小于 1 的有限数；两者按当前
-模型 T 的比例计算，四舍五入后最少为 1 token。`keepToolUses` 接受不小于 1 的安全整数；`minBytes` 接受
-不小于 0 的安全整数，只影响非 Anthropic 通道的本地清理，Anthropic 服务端不考虑大小。候选合计达不到下限
-时不清理。按 Anthropic 的[上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，
-释放下限越低，清理和提示缓存重写越频繁。清理减少输入内容，并不保证抵消缓存重写费用。
+非 Anthropic 的后台触发点为 `round(triggerRatio × T)`，默认 `triggerRatio: 0.8`。
+`pi-pleat.asyncCompaction.triggerRatio` 接受大于 0 且小于 1 的有限数，
+`asyncCompaction.modelOverrides["provider/modelId"]` 可逐模型覆盖。每项依次取有效的模型覆盖、
+普通值和默认值；无效值或结构产生去重警告。`/context` 显示实际 token 阈值、硬阈值和运行状态。
 
-清理触发点不影响 thinking，对压缩时间的影响也很小。Anthropic 的压缩请求不能同时带
-`context_management`，要发送未清理的历史并装入窗口，所以 Anthropic 上的压缩时间只由完整
-历史的大小决定。显式启用本地清理后，其他服务商在上下文到达压缩阈值之前会清理符合规则的结果；触发点早晚
-只改变清理发生的时间。触发点控制两件事：从什么时候开始减少每次请求的输入，以及旧结果在上下文
-中保留多久。触发点早，请求更早变小；触发点晚，模型更少需要召回，清理和缓存重写的次数也可能
-更少。服务端清理多久重写一次缓存尚未实测，留待阶段 6 与效果评估一起确定触发点。
+Anthropic 清理的默认值为触发点 0.5T、释放下限 0.1T 和保留最近 8 次工具调用。
+`triggerRatio` 接受大于 0 且不超过 1 的有限数；`floorRatio` 接受不小于 0 且小于
+`triggerRatio` 的有限数；换算为 tokens 后四舍五入，最少为 1。`keepToolUses` 接受不小于 1
+的安全整数。Anthropic 压缩请求发送未清理的完整历史，所以其压缩时间由清理前大小决定。
 
 原生压缩请求复用绑定请求的 `max_tokens`（至少 4,096）作为摘要输出和 thinking 空间。
 
@@ -512,15 +450,15 @@ Anthropic 压缩用量读取 `usage.iterations` 中的 compaction 项，存入�
 | 取消或会话状态变化 | 丢弃候选；不重试、不进入回退 |
 | 认证/权限错误、无效请求、无法确认完整性 | 保留历史，明确报告；不归类成“模型不支持” |
 | 压缩后的下一请求估计超过窗口 | 跳过该结果，保留历史并提示 |
-| 原生压缩可恢复失败或条件不满足 | 已配置回退模型时由它生成文本摘要；未配置时，`turn_end` 和已发出 trigger 的 Responses 压缩使用会话模型的摘要，其他 `session_before_compact` 交回 Pi 默认压缩 |
-| 指定回退模型失败 | `turn_end` 和 Responses-trigger 压缩用会话模型重试一次，其他 `session_before_compact` 交回 Pi 默认压缩；回退模型与会话模型相同时跳过并保留历史 |
+| 原生压缩可恢复失败或条件不满足 | 已配置回退模型时由它生成文本摘要；未配置时，后台压缩、`turn_end` 和已发出 trigger 的 Responses 压缩使用会话模型的摘要，其他 `session_before_compact` 交回 Pi 默认压缩 |
+| 指定回退模型失败 | 后台压缩、`turn_end` 和 Responses-trigger 压缩用会话模型重试一次，其他 `session_before_compact` 交回 Pi 默认压缩；回退模型与会话模型相同时跳过并保留历史 |
 
 回退摘要沿用 Pi 格式和工具序列化。它可能使保留的 Claude thinking 失效，所以 details 记录原因，
 插件提示 `Using a text summary: <原因>.`；交回 Pi 和跳过时也提示原因。每条提示在一个会话中只显示一次。
 所有允许的方法均失败时保持原历史并报告错误。
 
 可选设置位于 Pi 设置中 `pi-pleat` 键下：`fallbackModel`（`provider/model`）、`fallbackThinking` 和
-`responsesTriggerChannels`（第 7.2 节）和 `clearing`。清理的五项均可省略，也可在 `pi-pleat.clearing.modelOverrides["provider/modelId"]` 中按模型设置；
+`responsesTriggerChannels`（第 7.2 节）、`asyncCompaction` 和仅限 Anthropic 的 `clearing`。清理的三项均可省略，也可在 `pi-pleat.clearing.modelOverrides["provider/modelId"]` 中按模型设置；
 每项依次取匹配的模型覆盖、`pi-pleat.clearing` 的同名值和默认值。键精确区分大小写，模型 ID 可以包含斜线。
 普通值无效时警告并用默认值；普通的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。
 覆盖字段无效时保留解析后的普通值或默认值，警告说明使用的值。覆盖后的 `floorRatio >= triggerRatio` 时，
@@ -533,8 +471,8 @@ Anthropic 压缩用量读取 `usage.iterations` 中的 compaction 项，存入�
 配置无效时记录诊断（`/context` 显示错误），改用会话模型。`/context fallback <provider/model> [level]`
 确认模型存在且为物理模型后写入会话覆盖；`/context fallback default` 清除覆盖。
 
-`/context` 显示：当前通道；有效用量、窗口与比例、估算标记、Anthropic 清理前大小、压缩阈值和清理
-触发点、释放下限和 K；清理状态（服务端已应用的次数和 tokens，或本地批次数和当前分支被清理的结果数）；当前分支
+`/context` 显示：当前通道；有效用量、窗口与比例和估算标记；非 Anthropic 的后台压缩阈值、
+硬阈值和任务状态；Anthropic 的清理前大小、压缩阈值、清理触发点、释放下限、K 和服务端清理计数；
 当前选择的压缩方式（Anthropic、Responses-trigger 或文本摘要，已记录不支持时显示摘要路径）；
 各策略的压缩次数、压缩用量和费用（没有已知用量时显示 unknown，有条目缺少用量或用量不完整时标记
 partial）；原生回放状态或拒绝原因；当前通道的能力记录；召回次数；服务端报告的 thinking 丢弃次数和

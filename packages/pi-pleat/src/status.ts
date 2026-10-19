@@ -3,8 +3,7 @@ import type { ContextUsage, ExtensionAPI, ExtensionCommandContext, SessionEntry 
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import type { Limits, SessionStats } from "./budget.ts";
-import { contentBytes } from "./budget.ts";
-import { placeholder } from "./edits.ts";
+import type { CompactionUsage } from "./async.ts";
 import { resolveSummarizer } from "./fallback.ts";
 import type { Summarizer } from "./fallback.ts";
 import type { ReplayState } from "./requests.ts";
@@ -44,7 +43,7 @@ export function formatFallback(summarizer: Summarizer | { error: string }): stri
   return `Fallback summary: ${summarizer.model.provider}/${summarizer.model.id} (${summarizer.thinkingLevel}) · ${summarizer.label}`;
 }
 
-export function formatContextStatus({ model, limits, usage, raw, branch, stats, summarizer, replay, diagnostics, settings }: {
+export function formatContextStatus({ model, limits, usage, raw, branch, stats, summarizer, replay, diagnostics, settings, asyncState, unappliedUsage }: {
   model: Model<Api> | undefined;
   limits: Limits | undefined;
   usage: ContextUsage | undefined;
@@ -55,10 +54,11 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
   replay?: ReplayState;
   diagnostics: readonly string[];
   settings?: Record<string, unknown>;
+  asyncState?: "idle" | "running" | "ready";
+  unappliedUsage?: CompactionUsage;
 }): string {
   model = isPhysicalModel(model) ? model : undefined;
   const anthropic = !!model && isAnthropic(model);
-  const localClearingEnabled = limits?.localClearingEnabled === true;
   const lines = [`pi-pleat · ${model ? `${model.provider}/${model.id} (${model.api})` : "no physical model selected"}`];
   const tokens = usage?.tokens;
   const window = limits?.window ?? usage?.contextWindow;
@@ -67,26 +67,23 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
     context += ` (${(100 * tokens / window).toFixed(1)}%)${raw?.estimated ? ", estimated" : ""}`;
   }
   if (anthropic) context += ` · raw ${raw?.tokens ?? "unknown"} (Anthropic)`;
-  if (limits) {
-    context += ` · compaction at ${limits.threshold}`;
-    if (anthropic || model && localClearingEnabled) {
+  if (limits && model) {
+    if (anthropic) {
+      context += ` · compaction at ${limits.threshold}`;
       context += ` · clearing from ${limits.clearTrigger} (frees at least ${limits.clearFloor}, keeps ${limits.keepToolUses} tool uses)`;
-    }
+    } else if (limits.enabled) {
+      context += ` · async compaction at ${limits.asyncThreshold} (${asyncState ?? "idle"}) · hard limit ${limits.threshold}`;
+    } else context += " · auto compaction off";
   }
   lines.push(context);
   const key = model ? channelKey(channelOf(model)) : undefined;
-  const capabilities = [...readCapabilities(branch).values()].filter((record) => record.key === key);
-  const unsupportedClearing = capabilities.some((record) => record.feature === "clearing" && record.status === "unsupported");
-  const targets = new Map(branch.filter((entry) => entry.type === "context_edit").map((entry) => [entry.targetId, entry]));
-  const cleared = branch.filter((entry) => {
-    if (entry.type !== "message" || entry.message.role !== "toolResult") return false;
-    const content = targets.get(entry.id)?.replacement?.content;
-    return Array.isArray(content) && content.length === 1 && content[0].type === "text" &&
-      content[0].text === placeholder(entry.id, contentBytes(entry.message.content));
-  }).length;
-  lines.push(!model || (anthropic ? unsupportedClearing : !localClearingEnabled) ? "Clearing: off" : anthropic
-    ? `Clearing: server-side, ${stats.serverClears} applied, ${stats.serverClearedTokens} tokens this session`
-    : `Clearing: local, ${stats.localBatches} batches, ${cleared} results on this branch`);
+  const capabilities = [...readCapabilities(branch).values()].filter((record) =>
+    record.key === key && (anthropic || record.feature !== "clearing"));
+  if (anthropic) {
+    const unsupportedClearing = capabilities.some((record) => record.feature === "clearing" && record.status === "unsupported");
+    lines.push(unsupportedClearing ? "Clearing: off"
+      : `Clearing: server-side, ${stats.serverClears} applied, ${stats.serverClearedTokens} tokens this session`);
+  }
   const nativeFeature = !model ? undefined : anthropic ? "anthropic-compaction"
     : isResponsesTrigger(model, settings) ? "responses-trigger" : undefined;
   const unsupportedNative = capabilities.find((record) => record.feature === nativeFeature && record.status === "unsupported");
@@ -116,6 +113,13 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
     ? `${input} in / ${output} out · $${cost.toFixed(4)}`
     : "unknown in / unknown out · $unknown") + (complete ? "" : " (partial)");
   lines.push(`Compaction on this branch: ${compactions.length} (anthropic ${counts.anthropic}, responses-trigger ${counts["responses-trigger"]}, pi-summary ${counts["pi-summary"]}, pi ${counts.pi}) · usage ${totals}`);
+  if (unappliedUsage?.requests) {
+    const reported = unappliedUsage.usage;
+    const totals = (reported
+      ? `${reported.input + reported.cacheRead + reported.cacheWrite} in / ${reported.output} out · $${reported.cost.total.toFixed(4)}`
+      : "unknown in / unknown out · $unknown") + (unappliedUsage.usageComplete ? "" : " (partial)");
+    lines.push(`Unapplied compaction requests this session: ${unappliedUsage.requests} · usage ${totals}`);
+  }
   const latest = getLatestCompactionEntry(branch);
   const details = latest ? readPleatDetails(latest) : undefined;
   lines.push(details?.native ? model && sameChannel(channelOf(model), details)
@@ -143,7 +147,8 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
   lines.push(`Recall on this branch: ${recalls} calls`);
   lines.push(`Thinking drops reported on this branch: ${drops}${firstPath ? ` (first: ${firstPath})` : ""}`);
   lines.push(formatFallback(summarizer));
-  lines.push(`Recent: ${diagnostics.length ? diagnostics.slice(-5).join(" · ") : "none"}`);
+  const recent = anthropic ? diagnostics : diagnostics.filter((message) => !/clearing|context_management/i.test(message));
+  lines.push(`Recent: ${recent.length ? recent.slice(-5).join(" · ") : "none"}`);
   return lines.join("\n");
 }
 

@@ -1,8 +1,8 @@
 <h1 align="center">pi-pleat</h1>
 
 <p align="center">
-  Context management for <a href="https://github.com/earendil-works/pi">Pi</a>: clears old tool output,
-  lets the model recall it, and uses the provider's native compaction where it exists.
+  Context management for <a href="https://github.com/earendil-works/pi">Pi</a>: background compaction,
+  Anthropic context editing, and recall of original messages and tool output.
 </p>
 
 <p align="center">
@@ -43,9 +43,9 @@ pi-pleat is developed and tested with Pi 1.2.0. It needs no settings.
 | Provider | Old tool results | Compaction |
 |---|---|---|
 | Anthropic (`anthropic`) | Cleared by Anthropic's server-side context editing; all thinking is kept | Native compaction with the session model; the signed compaction block replaces the summarized history |
-| OpenAI Codex (`openai-codex`) and OpenAI (`openai`, Responses API) | Kept by default; local clearing is optional | The Responses `compaction_trigger` item, as sent by the official Codex client; the encrypted compaction item and the user messages replace the summarized history |
-| Custom channels in `responsesTriggerChannels` | Kept by default; local clearing is optional | The same Responses `compaction_trigger` protocol, through the channel's registered adapter |
-| Other providers | Kept by default; local clearing is optional | Pi's compaction, or a summary written by the fallback model |
+| OpenAI Codex (`openai-codex`) and OpenAI (`openai`, Responses API) | Included in the history sent for compaction | Background Responses `compaction_trigger`, as sent by the official Codex client; the encrypted compaction item and user messages replace the summarized history |
+| Custom channels in `responsesTriggerChannels` | Included in the history sent for compaction | The same background Responses protocol, through the channel's registered adapter |
+| Other providers | Included in the history sent for compaction | Background text summary using the fallback model or the session model |
 
 On Anthropic, pi-pleat compacts at the end of a turn when the history before server-side clearing
 exceeds the threshold, because a compaction request cannot use clearing. It compacts exactly the
@@ -54,22 +54,22 @@ after the compaction block, so the thinking in that reply is still accepted. Bef
 request, including after a restart, it checks the summary, the kept reply, the system prompt and the
 tools; if one of them changed, the request carries the summary as text instead.
 
-On the OpenAI channels and configured Responses-trigger channels, compaction starts when Pi's own threshold is reached or you run `/compact`.
-pi-pleat sends the history before Pi's cut point with a `compaction_trigger` item, reads the whole
-response, and keeps the text user messages (up to 64,000 tokens) and the compaction item. It sends
-the encrypted item only to the same provider, API, endpoint and model, so it also writes a readable
-summary with the fallback model at the same time. A user message with an image, or `/compact` with
-instructions, uses a text summary instead.
+On non-Anthropic channels, background compaction starts at 80% of Pi's compaction threshold by
+default. It captures a fixed prefix while the agent continues its work. A completed result replaces
+that prefix at a safe turn boundary; all messages and tool results added during the request stay in
+the context. A session, branch or model change cancels the candidate. At Pi's hard threshold, the
+agent waits for an eligible background request and uses foreground compaction if more space is
+needed. `/compact` starts a fresh foreground request and honors your instructions.
 
-Anthropic uses server-side clearing. Other channels keep tool results until compaction by default.
-Set `pi-pleat.clearing.localEnabled: true` to enable local clearing. When enabled, it starts when the
-context is larger than half of the compaction threshold and replaces the oldest tool results of
-1 KB or more with a note such as
-`[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`, keeps the results of the last
-eight tool calls, and acts only when a batch frees at least a tenth of the threshold. Results that
-are followed by Claude thinking on the branch are left alone, because editing them would invalidate
-that thinking. Anthropic's server-side clearing uses the same trigger, the same eight calls and the
-same minimum batch.
+On the OpenAI channels and configured Responses-trigger channels, pi-pleat sends the captured
+prefix with a `compaction_trigger` item, reads the whole response, and keeps the text user messages
+(up to 64,000 tokens) and the compaction item. It sends the encrypted item only to the same provider,
+API, endpoint and model, so it also writes a readable summary with the fallback model at the same
+time. A user message with an image, or `/compact` with instructions, uses a text summary instead.
+
+Anthropic uses server-side clearing above half of its compaction threshold. It keeps the last
+eight tool calls and frees at least a tenth of the threshold per batch. The client preserves the
+sent tool results and thinking.
 
 When native compaction is unavailable, cannot be shown to be safe, or still fails after retries,
 pi-pleat writes a text summary in Pi's format or lets Pi compact as usual, and shows the reason. A
@@ -106,7 +106,7 @@ passes the command or path of the kept tool call as `query`. Recall never re-run
 
 | Command | |
 |---|---|
-| `/context` | context usage and thresholds, the selected compaction method, clearing and compaction counts with their usage and cost (unknown or partial when a provider did not report usage), native replay state, provider capabilities, recall calls, thinking the provider reported as dropped, the fallback model, and recent notices |
+| `/context` | context usage, background compaction threshold and state (Anthropic shows server clearing instead), selected compaction method, compaction counts and cost, native replay, capabilities, recall calls, reported thinking drops, fallback model, and recent notices |
 | `/context fallback` | show the fallback model |
 | `/context fallback <provider/model> [level]` | use this model, and optionally this thinking level (`off` to `max`), for this session |
 | `/context fallback default` | remove the session choice |
@@ -115,7 +115,8 @@ passes the command or path of the kept tool call as `query`. Recall never re-run
 
 pi-pleat reads Pi's `compaction` settings. `reserveTokens` and `keepRecentTokens` each resolve from
 `compaction.modelOverrides` to `compaction` to Pi's defaults (16,384 and 20,000 tokens).
-`compaction.enabled: false` turns off automatic compaction; clearing and `/compact` still work.
+`compaction.enabled: false` turns off automatic and background compaction; Anthropic context editing
+and `/compact` still work.
 Invalid compaction token values, which Pi reports as errors, show a pi-pleat warning that names the
 value it uses.
 
@@ -136,12 +137,16 @@ under `pi-pleat` in Pi's `settings.json`
     "responsesTriggerChannels": [
       { "provider": "cliproxyapi", "api": "cliproxyapi-codex-responses" }
     ],
+    "asyncCompaction": {
+      "triggerRatio": 0.8,
+      "modelOverrides": {
+        "openai-codex/gpt-6.1-sol": { "triggerRatio": 0.7 }
+      }
+    },
     "clearing": {
-      "localEnabled": false,
       "triggerRatio": 0.5,
       "floorRatio": 0.1,
       "keepToolUses": 8,
-      "minBytes": 1024,
       "modelOverrides": {
         "anthropic/claude-sonnet-5-5": { "triggerRatio": 0.3, "keepToolUses": 4 }
       }
@@ -160,24 +165,26 @@ enabled, and Anthropic keeps its own native compaction route.
 Add a pair when its adapter and endpoint support the Responses `compaction_trigger` protocol. Requests
 use the selected model's registered adapter, endpoint and credentials. Native replay still requires
 the same provider, API, endpoint and model. `/context` shows the selected compaction method and reports
-the summary route when the provider has returned an unsupported capability. This setting selects
-compaction; clearing uses its own settings and thresholds.
+the summary route when the provider has returned an unsupported capability.
 
-Both override maps use exact `provider/modelId` keys, including case; model ids can contain slashes.
-Each clearing field resolves from the matching model override to `pi-pleat.clearing` to its default.
-All five fields are optional, including inside an override:
+`pi-pleat.asyncCompaction.triggerRatio` controls the background threshold for non-Anthropic channels.
+It defaults to `0.8` and accepts a finite number greater than 0 and less than 1. The start threshold
+is `round(triggerRatio × T)`, where `T = max(0, contextWindow - reserveTokens)`. The threshold includes
+the model's `reserveTokens` override. `asyncCompaction.modelOverrides["provider/modelId"]` can override
+the ratio for one model. Invalid values warn and use the valid ordinary value or the default.
+
+All override maps use exact `provider/modelId` keys, including case; model ids can contain slashes.
+The following settings apply only to Anthropic. Each field resolves from the matching model override
+to `pi-pleat.clearing` to its default. All three fields are optional, including inside an override:
 
 | Field under `pi-pleat.clearing` | Default | Valid values | Purpose |
 |---|---|---|---|
-| `localEnabled` | `false` | Boolean | Enable local clearing on non-Anthropic channels; Anthropic uses server-side clearing |
 | `triggerRatio` | `0.5` | Finite number, `0 < x <= 1` | Start clearing above this fraction of T |
 | `floorRatio` | `0.1` | Finite number, `0 <= x < 1`, less than `triggerRatio` | Minimum tokens freed per batch, as a fraction of T |
 | `keepToolUses` | `8` | Safe integer, `x >= 1` | Keep the newest tool calls and their results |
-| `minBytes` | `1024` | Safe integer, `x >= 0` | Minimum result size for local clearing on non-Anthropic channels |
 
 Both ratios use `T = max(0, contextWindow - reserveTokens)` for that model's window and resolved
-reserve. The clearing trigger and floor are rounded to tokens, with a minimum of 1. Anthropic ignores
-result size; `minBytes` only affects local clearing.
+reserve. The clearing trigger and floor are rounded to tokens, with a minimum of 1.
 
 Invalid ordinary clearing values warn and use defaults. If the ordinary `floorRatio >= triggerRatio`,
 both ratios use their defaults with one warning. Invalid override fields warn and keep the resolved
@@ -203,18 +210,20 @@ or Pi's threshold finds no native compaction to use. Native compaction always us
   `/context` reports that no physical model is selected.
 - Native compaction and replay require a stable endpoint in the selected model's `baseUrl`. Providers
   that change the endpoint during authentication are outside the supported scope: Pi 1.2's request
-  hook does not expose the effective endpoint after authentication.
+  hook does not expose the effective endpoint after authentication. Keep the account unchanged while a
+  background task runs; the SDK has no account-change event or stable account identity for validation.
 - Only Pi 1.2.0 has been tested.
 
 ## Verified scope
 
-The local tests (164 passing) run Pi's session machinery and its Anthropic, Codex and OpenAI adapters
+The local tests run Pi's session machinery and its Anthropic, Codex and OpenAI adapters
 against local mock servers. Live checks passed on 2026-10-14 for Anthropic `claude-haiku-5-5`, with
 four native compactions in one task, every later request under strict prefix binding, and a restart,
 and for OpenAI Codex `gpt-6-luna`, with two `compaction_trigger` compactions and a restart. The
 `openai` Responses channel is covered by the local mocks only. Custom Responses-trigger channels need
-separate provider verification. Real server-side clearing, recall by
-real models, summary quality, and the effect on cost and latency are not verified yet.
+separate provider verification. Background compaction has not been checked against a live provider.
+Real server-side clearing, recall by real models, summary quality, and the effect on cost and latency
+also need provider evaluation.
 
 [docs/validation.md](docs/validation.md) has the records, and [docs/architecture.md](docs/architecture.md)
 the design; both are in Chinese.

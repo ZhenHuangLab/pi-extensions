@@ -1,7 +1,7 @@
 {
   "name": "pi-pleat",
-  "version": "0.1.4",
-  "description": "Context management for Pi: clears old tool output, recalls it on demand, and uses native compaction on Anthropic and OpenAI Responses models",
+  "version": "0.2.0",
+  "description": "Background context compaction and original message recall for Pi, with native Anthropic and OpenAI Responses compaction",
   "type": "module",
   "keywords": [
     "pi-package"

@@ -1,11 +1,10 @@
 import { getLatestCompactionEntry } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens, readClearingSettings, readCompactionSettings } from "./budget.ts";
+import { createResponseObserver, createSessionStats, limitsFor, rawNextTokens, readAsyncCompactionSettings, readClearingSettings, readCompactionSettings } from "./budget.ts";
 import type { Limits, ResponseStats } from "./budget.ts";
-import { createCompactor } from "./compact.ts";
-import type { CompactionDecision } from "./compact.ts";
-import { planClearing } from "./edits.ts";
+import { createAsyncCompactor } from "./async.ts";
+import type { CompactArgs, CompactionDecision } from "./compact.ts";
 import { resolveSummarizer } from "./fallback.ts";
 import { isAnthropic, isClearingUnsupported, readAppliedEdits, withClearing } from "./providers/anthropic.ts";
 import { isResponsesTrigger, readResponsesTriggerChannels } from "./providers/openai.ts";
@@ -24,7 +23,9 @@ export default function piPleat(pi: ExtensionAPI): void {
   const observed = new Set<string>();
   let observer = createResponseObserver(stats);
   let requests = createRequests();
-  let coordinator = createCompactor(requests, diagnostic);
+  let coordinator = createAsyncCompactor(requests, diagnostic);
+  let foregroundStatus = 0;
+  let statusActive = false;
   let pending: ResponseStats | undefined;
   let failure: { capability: CapabilityRecord; entryId?: string } | undefined;
   let clearingRequestKey: string | undefined;
@@ -49,7 +50,9 @@ export default function piPleat(pi: ExtensionAPI): void {
   }
   function currentLimits(ctx: ExtensionContext, model: Model<Api>, settings = currentSettings(ctx)): Limits {
     for (const problem of readCompactionSettings(settings, model).problems) notify(ctx, problem);
-    for (const problem of readClearingSettings(settings, model).problems) notify(ctx, problem);
+    const problems = isAnthropic(model) ? readClearingSettings(settings, model).problems
+      : readAsyncCompactionSettings(settings, model).problems;
+    for (const problem of problems) notify(ctx, problem);
     return limitsFor(model, settings);
   }
   function report(ctx: ExtensionContext, decision: CompactionDecision): void {
@@ -57,7 +60,21 @@ export default function piPleat(pi: ExtensionAPI): void {
     else if (decision.kind === "pi-default") notify(ctx, `Using Pi compaction: ${decision.reason}.`);
     else if (decision.details.strategy === "pi-summary") notify(ctx, `Using a text summary: ${decision.details.reason}.`);
   }
-  function reset(): void {
+  async function compactNow(args: CompactArgs): Promise<CompactionDecision> {
+    const status = ++foregroundStatus;
+    statusActive = true;
+    args.ctx.ui.setStatus("pi-pleat", "compacting…");
+    try { return await coordinator.compactNow(args); }
+    finally {
+      if (status === foregroundStatus) {
+        statusActive = false;
+        args.ctx.ui.setStatus("pi-pleat", undefined);
+      }
+    }
+  }
+  async function reset(): Promise<void> {
+    foregroundStatus++;
+    await coordinator.shutdown();
     stats = createSessionStats();
     responses.clear();
     diagnostics.length = 0;
@@ -65,7 +82,7 @@ export default function piPleat(pi: ExtensionAPI): void {
     observed.clear();
     observer = createResponseObserver(stats);
     requests = createRequests();
-    coordinator = createCompactor(requests, diagnostic);
+    coordinator = createAsyncCompactor(requests, diagnostic);
     pending = undefined;
     failure = undefined;
     clearingRequestKey = undefined;
@@ -81,13 +98,33 @@ export default function piPleat(pi: ExtensionAPI): void {
       const branch = ctx.sessionManager.getBranch();
       const settings = currentSettings(ctx);
       const currentReplay = model && replay?.entryId === getLatestCompactionEntry(branch)?.id && replay?.channel === channelKey(channelOf(model)) ? replay.result : undefined;
-      return formatContextStatus({ model, limits: model ? currentLimits(ctx, model, settings) : undefined, settings,
+      const limits = model ? currentLimits(ctx, model, settings) : undefined;
+      if (limits) coordinator.observe({ pi, ctx, limits });
+      return formatContextStatus({ model, limits, settings, asyncState: coordinator.state,
+        unappliedUsage: coordinator.unappliedUsage,
         usage: ctx.getContextUsage(), raw: rawNextTokens(ctx, responses), branch, stats,
         summarizer: resolveSummarizer(pi, ctx), replay: currentReplay, diagnostics });
     }),
   });
-  pi.on("session_start", reset);
-  pi.on("session_shutdown", reset);
+  pi.on("session_start", async (_event, ctx) => {
+    await reset();
+    if (statusActive) ctx.ui.setStatus("pi-pleat", undefined);
+    statusActive = false;
+  });
+  pi.on("session_shutdown", async (_event, ctx) => {
+    foregroundStatus++;
+    await coordinator.shutdown();
+    if (statusActive) ctx.ui.setStatus("pi-pleat", undefined);
+    statusActive = false;
+  });
+  pi.on("session_before_switch", () => coordinator.invalidate());
+  pi.on("session_before_fork", () => coordinator.invalidate());
+  pi.on("session_before_tree", () => coordinator.invalidate());
+  pi.on("session_tree", () => coordinator.invalidate());
+  pi.on("model_select", () => coordinator.invalidate());
+  pi.on("thinking_level_select", () => coordinator.invalidate());
+  pi.on("session_compact", () => coordinator.invalidate());
+  pi.on("agent_settled", (event) => { if (event.aborted) coordinator.invalidate(); });
 
   pi.on("before_provider_request", (event, ctx) => {
     try {
@@ -112,6 +149,7 @@ export default function piPleat(pi: ExtensionAPI): void {
         if (!warm) clearingRequestKey = key;
       } else if (!warm) clearingRequestKey = undefined;
       requests.record(result, channelOf(model));
+      if (!isAnthropic(model)) coordinator.start({ pi, ctx, stats, limits: currentLimits(ctx, model, settings) });
       return result;
     } catch {
       diagnostic("Could not prepare the provider request.");
@@ -143,38 +181,49 @@ export default function piPleat(pi: ExtensionAPI): void {
   });
 
   pi.on("turn_end", async (event, ctx) => {
-    if (!matchesResponse(ctx.model, event.message)) { requests.discard(); pending = undefined; failure = undefined; return; }
+    if (!matchesResponse(ctx.model, event.message)) {
+      coordinator.invalidate(); requests.discard(); pending = undefined; failure = undefined; return;
+    }
     requests.onTurnEnd(event);
     if (pending) responses.set(event.messageEntryId, pending);
     pending = undefined;
     if (failure) failure.entryId = event.messageEntryId;
-    if (event.outcome !== "completed") return;
+    if (event.outcome !== "completed") {
+      if (event.outcome === "aborted") coordinator.invalidate();
+      return;
+    }
     const model = ctx.model!;
     const limits = currentLimits(ctx, model);
+    if (event.entries.some((entry) => entry.type !== "custom")) { coordinator.invalidate(); return; }
+    if (!limits.enabled || ctx.signal?.aborted) { coordinator.invalidate(); return; }
     if (isAnthropic(model)) {
       const raw = rawNextTokens(ctx, responses);
       if (!limits.enabled || !raw || raw.tokens <= limits.threshold || !ctx.signal) return;
-      const decision = await coordinator.compactNow({ pi, ctx, trigger: "turn_end", signal: ctx.signal, stats, limits });
+      const decision = await compactNow({ pi, ctx, trigger: "turn_end", signal: ctx.signal, stats, limits });
       report(ctx, decision);
       if (decision.kind === "result") return { entries: [...event.entries, ...decision.customEntries,
         { type: "compaction", summary: decision.summary, firstKeptEntryId: decision.firstKeptEntryId, details: decision.details, usage: decision.usage }] };
       if (decision.kind === "skip" && decision.customEntries?.length) return { entries: [...event.entries, ...decision.customEntries] };
       return;
     }
-    const tokens = ctx.getContextUsage()?.tokens;
-    if (tokens === null || tokens === undefined) return;
-    const drafts = planClearing({ branch: ctx.sessionManager.getBranch(), effectiveTokens: tokens, limits });
-    if (!drafts.length) return;
-    stats.localBatches++;
-    stats.localClearedEntries += drafts.length;
-    return { entries: [...event.entries, ...drafts] };
+    const decision = coordinator.takeReady({ pi, ctx, limits }, event.entries);
+    if (decision) {
+      report(ctx, decision);
+      if (decision.kind === "result") return { entries: [...event.entries, ...decision.customEntries,
+        { type: "compaction", summary: decision.summary, firstKeptEntryId: decision.firstKeptEntryId,
+          details: decision.details, usage: decision.usage }] };
+      if (decision.customEntries?.length) return { entries: [...event.entries, ...decision.customEntries] };
+    }
+    // A result completed while idle waits for this boundary or a hard compaction.
+    coordinator.start({ pi, ctx, stats, limits });
   });
 
   pi.on("session_before_compact", async (event, ctx) => {
     if (!isPhysicalModel(ctx.model)) return;
-    const decision = await coordinator.compactNow({ pi, ctx, trigger: event.reason, preparation: event.preparation,
+    const decision = await compactNow({ pi, ctx, trigger: event.reason, preparation: event.preparation,
       signal: event.signal, customInstructions: event.customInstructions, stats, limits: currentLimits(ctx, ctx.model) });
     report(ctx, decision);
+    for (const entry of decision.customEntries ?? []) pi.appendEntry(entry.customType, entry.data);
     if (decision.kind === "result") return { compaction: { summary: decision.summary, firstKeptEntryId: decision.firstKeptEntryId,
       tokensBefore: event.preparation.tokensBefore, details: decision.details, usage: decision.usage } };
     if (decision.kind === "skip") return { cancel: true };

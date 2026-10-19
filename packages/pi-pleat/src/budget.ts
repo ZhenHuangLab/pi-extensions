@@ -7,12 +7,11 @@ export interface ClearingSettings {
   triggerRatio: number;
   floorRatio: number;
   keepToolUses: number;
-  minBytes: number;
-  localEnabled: boolean;
 }
 export const DEFAULT_CLEARING: Readonly<ClearingSettings> = Object.freeze({
-  triggerRatio: 0.5, floorRatio: 0.1, keepToolUses: 8, minBytes: 1024, localEnabled: false,
+  triggerRatio: 0.5, floorRatio: 0.1, keepToolUses: 8,
 });
+export const DEFAULT_ASYNC_TRIGGER_RATIO = 0.8;
 export const CONTEXT_SAFETY_TOKENS = 4096;
 
 function isTokenCount(value: unknown): value is number {
@@ -51,11 +50,55 @@ export function readCompactionSettings(settings: Record<string, unknown>, model:
     keepRecent: tokens("keepRecentTokens", 20000), problems };
 }
 
-const clearingFields: [Exclude<keyof ClearingSettings, "localEnabled">, (value: number) => boolean, string][] = [
+export function readAsyncCompactionSettings(settings: Record<string, unknown>, model: Pick<Model<Api>, "provider" | "id">): {
+  triggerRatio: number; problems: string[];
+} {
+  const result = { triggerRatio: DEFAULT_ASYNC_TRIGGER_RATIO, problems: [] as string[] };
+  if (!Object.hasOwn(settings, "pi-pleat")) return result;
+  const config = settings["pi-pleat"];
+  if (!isRecord(config)) {
+    result.problems.push(`Invalid pi-pleat: use an object. Using async compaction triggerRatio ${result.triggerRatio}.`);
+    return result;
+  }
+  if (!Object.hasOwn(config, "asyncCompaction")) return result;
+  const values = config.asyncCompaction;
+  if (!isRecord(values)) {
+    result.problems.push(`Invalid pi-pleat.asyncCompaction: use an object. Using triggerRatio ${result.triggerRatio}.`);
+    return result;
+  }
+  function apply(values: Record<string, unknown>, path: string, allowOverrides: boolean): void {
+    for (const field of Object.keys(values)) {
+      if (field !== "triggerRatio" && !(allowOverrides && field === "modelOverrides")) {
+        result.problems.push(`Unknown setting ${path}.${field} ignored.`);
+      }
+    }
+    if (!Object.hasOwn(values, "triggerRatio")) return;
+    const ratio = values.triggerRatio;
+    if (typeof ratio === "number" && Number.isFinite(ratio) && ratio > 0 && ratio < 1) {
+      result.triggerRatio = ratio;
+    } else {
+      result.problems.push(`Invalid ${path}.triggerRatio: use a finite number greater than 0 and less than 1. Ignoring this value.`);
+    }
+  }
+  apply(values, "pi-pleat.asyncCompaction", true);
+  if (!Object.hasOwn(values, "modelOverrides")) return result;
+  if (!isRecord(values.modelOverrides)) {
+    result.problems.push("Invalid pi-pleat.asyncCompaction.modelOverrides: use an object. Ignoring async compaction model overrides.");
+    return result;
+  }
+  const key = `${model.provider}/${model.id}`;
+  if (!Object.hasOwn(values.modelOverrides, key)) return result;
+  const entry = values.modelOverrides[key];
+  const path = `pi-pleat.asyncCompaction.modelOverrides["${key}"]`;
+  if (isRecord(entry)) apply(entry, path, false);
+  else result.problems.push(`Invalid ${path}: use an object. Using triggerRatio ${result.triggerRatio}.`);
+  return result;
+}
+
+const clearingFields: [keyof ClearingSettings, (value: number) => boolean, string][] = [
   ["triggerRatio", (value) => value > 0 && value <= 1, "use a finite number greater than 0 and at most 1"],
   ["floorRatio", (value) => value >= 0 && value < 1, "use a finite number at least 0 and less than 1"],
   ["keepToolUses", (value) => Number.isSafeInteger(value) && value >= 1, "use a safe integer at least 1"],
-  ["minBytes", (value) => Number.isSafeInteger(value) && value >= 0, "use a safe integer at least 0"],
 ];
 
 export function readClearingSettings(settings: Record<string, unknown>, model: Pick<Model<Api>, "provider" | "id">): {
@@ -63,7 +106,7 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
 } {
   const clearing = { ...DEFAULT_CLEARING };
   const sources: Record<keyof ClearingSettings, "default" | "settings"> = {
-    triggerRatio: "default", floorRatio: "default", keepToolUses: "default", minBytes: "default", localEnabled: "default",
+    triggerRatio: "default", floorRatio: "default", keepToolUses: "default",
   };
   const problems: string[] = [];
   const result = { clearing, problems };
@@ -81,12 +124,6 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
   }
   for (const key of Object.keys(values)) {
     if (key !== "modelOverrides" && !Object.hasOwn(DEFAULT_CLEARING, key)) problems.push(`Unknown setting pi-pleat.clearing.${key} ignored.`);
-  }
-  if (Object.hasOwn(values, "localEnabled")) {
-    if (typeof values.localEnabled === "boolean") {
-      clearing.localEnabled = values.localEnabled;
-      sources.localEnabled = "settings";
-    } else problems.push("Invalid pi-pleat.clearing.localEnabled: use a boolean. Using the default false.");
   }
   for (const [key, valid, rule] of clearingFields) {
     if (!Object.hasOwn(values, key)) continue;
@@ -120,13 +157,6 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
     if (!Object.hasOwn(DEFAULT_CLEARING, field)) problems.push(`Unknown setting ${path}.${field} ignored.`);
   }
   const ordinary = { ...clearing };
-  if (Object.hasOwn(entry, "localEnabled")) {
-    if (typeof entry.localEnabled === "boolean") clearing.localEnabled = entry.localEnabled;
-    else {
-      const label = sources.localEnabled === "settings" ? "the pi-pleat.clearing value" : "the default";
-      problems.push(`Invalid ${path}.localEnabled: use a boolean. Using ${label} ${ordinary.localEnabled}.`);
-    }
-  }
   for (const [field, valid, rule] of clearingFields) {
     if (!Object.hasOwn(entry, field)) continue;
     const value = entry[field];
@@ -151,11 +181,10 @@ export interface Limits {
   keepRecent: number;
   enabled: boolean;
   threshold: number;
+  asyncThreshold: number;
   clearTrigger: number;
   clearFloor: number;
   keepToolUses: number;
-  minClearBytes: number;
-  localClearingEnabled: boolean;
 }
 
 export function limitsFor(model: Model<Api>, settings: Record<string, unknown>): Limits {
@@ -165,9 +194,10 @@ export function limitsFor(model: Model<Api>, settings: Record<string, unknown>):
   return {
     window: model.contextWindow, reserve: compaction.reserve, keepRecent: compaction.keepRecent,
     enabled: compaction.enabled, threshold,
+    asyncThreshold: Math.round(readAsyncCompactionSettings(settings, model).triggerRatio * threshold),
     clearTrigger: Math.max(1, Math.round(clearing.triggerRatio * threshold)),
     clearFloor: Math.max(1, Math.round(clearing.floorRatio * threshold)),
-    keepToolUses: clearing.keepToolUses, minClearBytes: clearing.minBytes, localClearingEnabled: clearing.localEnabled,
+    keepToolUses: clearing.keepToolUses,
   };
 }
 
@@ -187,16 +217,13 @@ export interface ResponseStats {
 export interface SessionStats {
   serverClears: number;
   serverClearedTokens: number;
-  localBatches: number;
-  localClearedEntries: number;
   nativeFailures: number;
   fallbacks: number;
 }
 
 export function createSessionStats(): SessionStats {
   return {
-    serverClears: 0, serverClearedTokens: 0, localBatches: 0,
-    localClearedEntries: 0, nativeFailures: 0, fallbacks: 0,
+    serverClears: 0, serverClearedTokens: 0, nativeFailures: 0, fallbacks: 0,
   };
 }
 

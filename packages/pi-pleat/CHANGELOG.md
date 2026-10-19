@@ -2,6 +2,16 @@
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.0
+
+### Minor Changes
+
+- 30375d8: Allow custom provider/API pairs to use Codex Responses-trigger compaction through `pi-pleat.responsesTriggerChannels`. Use the configured channels for compaction and native replay, preserve their leading Responses instructions, and show the selected compaction method in `/context`. Document the stable-endpoint requirement for native compaction and replay on Pi 1.2.
+
+  Replace non-Anthropic local clearing with background compaction. Start at `pi-pleat.asyncCompaction.triggerRatio` of the hard compaction threshold (default 0.8, with per-model overrides), use native Responses compaction on configured channels and text summaries elsewhere, preserve messages appended while the request runs, and adopt results at safe boundaries. Handle cancellation, obsolete results, and foreground compaction through one coordinator. Show the background threshold and state in `/context`; clearing settings and status apply only to Anthropic.
+
+  Extend `recall` to retrieve original user and assistant text covered by native compaction or text summaries, including compaction that retains no earlier messages, while preserving branch isolation and the existing tool-output recall behavior.
+
 ## 0.1.4
 
 ### Patch Changes

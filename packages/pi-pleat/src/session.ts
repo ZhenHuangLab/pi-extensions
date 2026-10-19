@@ -219,9 +219,3 @@ export function toolRecords(branch: SessionEntry[]): ToolRecord[] {
   });
   return records;
 }
-
-export function isClaudeThinking(message: AgentMessage): boolean {
-  return message.role === "assistant" && message.api === "anthropic-messages" &&
-    message.content.some((block) => block.type === "thinking" &&
-      (block.redacted === true || !!block.thinkingSignature));
-}

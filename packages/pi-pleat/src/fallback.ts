@@ -7,7 +7,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { clampThinkingLevel, hasApi } from "@earendil-works/pi-ai";
-import type { Api, Model, RetryPolicy, ThinkingBudgets, Usage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessage, AssistantMessageEventStream, Model, RetryPolicy, ThinkingBudgets, Usage } from "@earendil-works/pi-ai";
 import { CONTEXT_SAFETY_TOKENS, limitsFor } from "./budget.ts";
 import type { Limits } from "./budget.ts";
 import { isPhysicalModel, isRecord, isThinkingLevel, readFallbackOverride } from "./session.ts";
@@ -129,7 +129,7 @@ export interface Summary {
   readFiles: string[];
   modifiedFiles: string[];
 }
-export async function summarize({ ctx, preparation, summarizer, customInstructions, signal, settings, checkState }: {
+export async function summarize({ ctx, preparation, summarizer, customInstructions, signal, settings, checkState, onUsage }: {
   ctx: ExtensionContext;
   preparation: CompactionPreparation;
   summarizer: Summarizer;
@@ -137,6 +137,7 @@ export async function summarize({ ctx, preparation, summarizer, customInstructio
   signal: AbortSignal;
   settings: Record<string, unknown>;
   checkState?: () => void;
+  onUsage?: (usage: Usage | undefined) => void;
 }): Promise<Summary> {
   const { model, thinkingLevel } = summarizer;
   const reserve = limitsFor(model, settings).reserve;
@@ -152,8 +153,21 @@ export async function summarize({ ctx, preparation, summarizer, customInstructio
   const streamFn: StreamFn = async (model, context, options) => {
     signal.throwIfAborted();
     checkState?.();
-    const stream = ctx.modelRegistry.streamSimple(model, context, { ...options, thinkingBudgets });
-    const response = await stream.result();
+    let stream: AssistantMessageEventStream;
+    let response: AssistantMessage;
+    try {
+      stream = ctx.modelRegistry.streamSimple(model, context, { ...options, thinkingBudgets });
+      response = await stream.result();
+    } catch (error) {
+      usageComplete = false;
+      onUsage?.(undefined);
+      throw error;
+    }
+    // A completed request is billable even when its candidate is now obsolete.
+    const reported = knownUsage(response.usage);
+    usage = combineUsage(usage, reported);
+    if (!reported) usageComplete = false;
+    onUsage?.(reported);
     signal.throwIfAborted();
     checkState?.();
     // Pi adds file lists and split-turn headings after it reads the raw reply.
@@ -166,9 +180,6 @@ export async function summarize({ ctx, preparation, summarizer, customInstructio
     if (!response.content.some((block) => block.type === "text" && block.text.trim())) {
       throw new Error("Fallback summary was empty.");
     }
-    const reported = knownUsage(response.usage);
-    usage = combineUsage(usage, reported);
-    if (!reported) usageComplete = false;
     return stream;
   };
   const retry = retryPolicy(settings);
