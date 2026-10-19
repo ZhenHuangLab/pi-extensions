@@ -8,7 +8,7 @@ import type { Limits, SessionStats } from "./budget.ts";
 import { combineUsage, prepareFromBranch, resolveSummarizer, summarize } from "./fallback.ts";
 import type { CompactionPreparation, Summarizer } from "./fallback.ts";
 import { compactionPayload, isAnthropic, keptIdentity, requestCompaction } from "./providers/anthropic.ts";
-import { isResponsesTrigger, requestTriggerCompaction } from "./providers/openai.ts";
+import { isResponsesTrigger, readResponsesTriggerChannels, requestTriggerCompaction } from "./providers/openai.ts";
 import type { ResponsesOutcome } from "./providers/openai.ts";
 import { applyReplay } from "./requests.ts";
 import type { Requests } from "./requests.ts";
@@ -56,6 +56,7 @@ export function createCompactor(requests: Requests, diagnostic: (message: string
     if (!unchanged()) return changed();
     const branch = ctx.sessionManager.getBranch();
     const settings = { ...pi.getSettings() };
+    for (const problem of readResponsesTriggerChannels(settings).problems) diagnostic(problem);
     const customEntries: CustomEntryDraft[] = [];
     const capabilities = readCapabilities(branch);
     const feature: Feature = isAnthropic(model) ? "anthropic-compaction" : "responses-trigger";
@@ -178,7 +179,7 @@ export function createCompactor(requests: Requests, diagnostic: (message: string
     }
     if ("error" in resolved) return finish({ kind: "skip", reason: resolved.error });
     let summarizer = resolved;
-    if (isResponsesTrigger(model)) {
+    if (isResponsesTrigger(model, settings)) {
       if (capabilities.get(featureKey)?.status === "unsupported") reason = "native compaction unsupported";
       else if (args.customInstructions?.trim()) reason = "custom-instructions";
       else if (trigger !== "turn_end" && args.preparation) {
@@ -195,7 +196,7 @@ export function createCompactor(requests: Requests, diagnostic: (message: string
               ctx, model, prefixMessages, thinkingLevel: pi.getThinkingLevel(), signal,
               splice(payload) {
                 if (!unchanged()) throw new Error("state changed");
-                const replay = applyReplay(payload, model, branch);
+                const replay = applyReplay(payload, model, branch, settings);
                 if (replay.state === "rejected") throw new Error("Native replay rejected.");
                 return replay.payload;
               },

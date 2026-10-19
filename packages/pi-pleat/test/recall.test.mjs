@@ -58,12 +58,12 @@ test("recall is branch-local and keeps compressed and cleared originals after re
   h.manager.appendCompaction("A fixed summary.", current.assistantId, 100);
   assert.equal(h.manager.buildSessionContext().messages.some((message) => JSON.stringify(message).includes("original before compaction")), false);
   assert.equal((await h.recall({ id: early.entryId })).content[1].text, "original before compaction");
-  await assert.rejects(h.recall({ id: sibling.entryId }), { message: `${sibling.entryId} is not on the current branch. Use query to search this branch.` });
-  await assert.rejects(h.recall({ query: "sibling-only-value" }), { message: 'No earlier tool result matches "sibling-only-value". Try a shorter query or a path from the call.' });
+  await assert.rejects(h.recall({ id: sibling.entryId }), { message: `No original tool result or compacted message with id ${sibling.entryId} on the current branch. Use query with a command, path, or message text.` });
+  await assert.rejects(h.recall({ query: "sibling-only-value" }), { message: 'No original tool result or compacted message matches "sibling-only-value". Try a shorter query or text from the message or call.' });
   await h.reopen();
   assert.equal((await h.recall({ id: early.entryId })).content[1].text, "original before compaction");
   assert.equal((await h.recall({ query: "current-only-value" })).details.entryId, current.entryId);
-  await assert.rejects(h.recall({ id: sibling.entryId }), /not on the current branch/);
+  await assert.rejects(h.recall({ id: sibling.entryId }), /on the current branch/);
   assert.deepEqual(h.errors, []);
 });
 
@@ -110,8 +110,8 @@ test("recall validates arguments and returns fixed, actionable errors", testOpti
   for (const params of [{}, { id: " " }, { query: "\t" }, { id: "one", query: "two" }, { id: "", query: "" }]) {
     await assert.rejects(h.recall(params), { message: "Pass either id or query." });
   }
-  await assert.rejects(h.recall({ id: "missing" }), { message: "No tool result with id missing on the current branch. Use query with a command, path, or text." });
-  await assert.rejects(h.recall({ query: "absent" }), { message: 'No earlier tool result matches "absent". Try a shorter query or a path from the call.' });
+  await assert.rejects(h.recall({ id: "missing" }), { message: "No original tool result or compacted message with id missing on the current branch. Use query with a command, path, or message text." });
+  await assert.rejects(h.recall({ query: "absent" }), { message: 'No original tool result or compacted message matches "absent". Try a shorter query or text from the message or call.' });
   const args = { other: "a".repeat(100) };
   const saved = appendTool(h.manager, { id: "args", args });
   assert.ok((await h.recall({ id: saved.entryId })).content[0].text.includes(`${JSON.stringify(args).slice(0, 80)}…`));

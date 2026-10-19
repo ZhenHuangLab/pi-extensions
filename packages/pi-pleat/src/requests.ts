@@ -3,6 +3,7 @@ import type { SessionEntry, TurnEndEvent } from "@earendil-works/pi-coding-agent
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { COMPACT_BETA } from "./providers/anthropic.ts";
+import { isResponsesTrigger } from "./providers/openai.ts";
 import { canonicalJson, channelOf, isRecord, readPleatDetails, sameChannel, sha256 } from "./session.ts";
 import type { Channel } from "./session.ts";
 
@@ -52,7 +53,9 @@ function onlyText(message: unknown, type: string): string | undefined {
   return typeof content[0].text === "string" ? content[0].text : undefined;
 }
 
-export function applyReplay(payload: Record<string, unknown>, model: Model<Api>, branch: SessionEntry[]): ReplayResult {
+export function applyReplay(
+  payload: Record<string, unknown>, model: Model<Api>, branch: SessionEntry[], settings: Record<string, unknown> = {},
+): ReplayResult {
   const reject = (reason: string): ReplayResult => ({ payload, state: "rejected", reason });
   try {
     const latest = getLatestCompactionEntry(branch);
@@ -84,12 +87,15 @@ export function applyReplay(payload: Record<string, unknown>, model: Model<Api>,
         betas: [...new Set([...(Array.isArray(payload.betas) ? payload.betas : []), COMPACT_BETA])],
       } };
     }
-    if (details.native.kind === "responses-trigger" && Array.isArray(payload.input)) {
-      // Pi's OpenAI adapter puts the leading instruction in input. Codex uses
-      // instructions instead. Preserve that one instruction and verify the next
-      // fixed item; never search the history for matching summary text.
+    if (details.native.kind === "responses-trigger") {
+      if (!isResponsesTrigger(model, settings)) return { payload, state: "none", reason: "Responses trigger is not configured for this channel" };
+      if (!Array.isArray(payload.input)) return reject("payload shape differs");
+      // The built-in Codex channel uses top-level instructions. OpenAI and
+      // explicitly configured channels can have one plain leading instruction.
+      // Verify the next fixed item; never search history for summary text.
       const first = payload.input[0];
-      const index = model.provider === "openai" && model.api === "openai-responses" && isRecord(first) &&
+      const codex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
+      const index = !codex && isRecord(first) &&
         (first.role === "developer" || first.role === "system") && typeof first.content === "string" &&
         Object.keys(first).every((key) => key === "role" || key === "content") ? 1 : 0;
       const message = payload.input[index];

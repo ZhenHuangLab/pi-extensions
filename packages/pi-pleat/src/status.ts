@@ -9,6 +9,7 @@ import { resolveSummarizer } from "./fallback.ts";
 import type { Summarizer } from "./fallback.ts";
 import type { ReplayState } from "./requests.ts";
 import { isAnthropic } from "./providers/anthropic.ts";
+import { isResponsesTrigger } from "./providers/openai.ts";
 import { channelKey, channelOf, FALLBACK_ENTRY, isPhysicalModel, isRecord, isThinkingLevel, readCapabilities, readPleatDetails, sameChannel } from "./session.ts";
 
 export type ContextArgs =
@@ -43,7 +44,7 @@ export function formatFallback(summarizer: Summarizer | { error: string }): stri
   return `Fallback summary: ${summarizer.model.provider}/${summarizer.model.id} (${summarizer.thinkingLevel}) · ${summarizer.label}`;
 }
 
-export function formatContextStatus({ model, limits, usage, raw, branch, stats, summarizer, replay, diagnostics }: {
+export function formatContextStatus({ model, limits, usage, raw, branch, stats, summarizer, replay, diagnostics, settings }: {
   model: Model<Api> | undefined;
   limits: Limits | undefined;
   usage: ContextUsage | undefined;
@@ -53,8 +54,11 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
   summarizer: Summarizer | { error: string };
   replay?: ReplayState;
   diagnostics: readonly string[];
+  settings?: Record<string, unknown>;
 }): string {
   model = isPhysicalModel(model) ? model : undefined;
+  const anthropic = !!model && isAnthropic(model);
+  const localClearingEnabled = limits?.localClearingEnabled === true;
   const lines = [`pi-pleat · ${model ? `${model.provider}/${model.id} (${model.api})` : "no physical model selected"}`];
   const tokens = usage?.tokens;
   const window = limits?.window ?? usage?.contextWindow;
@@ -62,8 +66,13 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
   if (tokens !== null && tokens !== undefined && window !== undefined && window > 0) {
     context += ` (${(100 * tokens / window).toFixed(1)}%)${raw?.estimated ? ", estimated" : ""}`;
   }
-  if (model && isAnthropic(model)) context += ` · raw ${raw?.tokens ?? "unknown"} (Anthropic)`;
-  if (limits) context += ` · compaction at ${limits.threshold} · clearing from ${limits.clearTrigger} (frees at least ${limits.clearFloor}, keeps ${limits.keepToolUses} tool uses)`;
+  if (anthropic) context += ` · raw ${raw?.tokens ?? "unknown"} (Anthropic)`;
+  if (limits) {
+    context += ` · compaction at ${limits.threshold}`;
+    if (anthropic || model && localClearingEnabled) {
+      context += ` · clearing from ${limits.clearTrigger} (frees at least ${limits.clearFloor}, keeps ${limits.keepToolUses} tool uses)`;
+    }
+  }
   lines.push(context);
   const key = model ? channelKey(channelOf(model)) : undefined;
   const capabilities = [...readCapabilities(branch).values()].filter((record) => record.key === key);
@@ -75,9 +84,17 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
     return Array.isArray(content) && content.length === 1 && content[0].type === "text" &&
       content[0].text === placeholder(entry.id, contentBytes(entry.message.content));
   }).length;
-  lines.push(!model || unsupportedClearing && isAnthropic(model) ? "Clearing: off" : isAnthropic(model)
+  lines.push(!model || (anthropic ? unsupportedClearing : !localClearingEnabled) ? "Clearing: off" : anthropic
     ? `Clearing: server-side, ${stats.serverClears} applied, ${stats.serverClearedTokens} tokens this session`
     : `Clearing: local, ${stats.localBatches} batches, ${cleared} results on this branch`);
+  const nativeFeature = !model ? undefined : anthropic ? "anthropic-compaction"
+    : isResponsesTrigger(model, settings) ? "responses-trigger" : undefined;
+  const unsupportedNative = capabilities.find((record) => record.feature === nativeFeature && record.status === "unsupported");
+  lines.push(!model ? "Compaction route: unavailable"
+    : unsupportedNative ? `Compaction route: text/Pi summary (native unsupported: ${unsupportedNative.reason})`
+    : nativeFeature === "anthropic-compaction" ? "Compaction route: Anthropic native"
+    : nativeFeature === "responses-trigger" ? "Compaction route: Responses-trigger native"
+    : "Compaction route: text/Pi summary");
   const compactions = branch.filter((entry) => entry.type === "compaction");
   const counts = { anthropic: 0, "responses-trigger": 0, "pi-summary": 0, pi: 0 };
   let input = 0, output = 0, cost = 0;
@@ -102,7 +119,8 @@ export function formatContextStatus({ model, limits, usage, raw, branch, stats, 
   const latest = getLatestCompactionEntry(branch);
   const details = latest ? readPleatDetails(latest) : undefined;
   lines.push(details?.native ? model && sameChannel(channelOf(model), details)
-    ? replay?.state === "applied" ? `Native replay: active (${details.strategy})` : `Native replay: not active: ${replay?.reason ?? "no request since compaction"}`
+    ? !nativeFeature ? "Native replay: not active: channel is not configured"
+      : replay?.state === "applied" ? `Native replay: active (${details.strategy})` : `Native replay: not active: ${replay?.reason ?? "no request since compaction"}`
     : "Native replay: not active: channel differs" : "Native replay: none");
   lines.push(`Capabilities: ${capabilities.length ? capabilities.map((record) => `${record.feature} ${record.status}`).join(" · ") : "unknown"}`);
   let recalls = 0, drops = 0;

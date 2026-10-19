@@ -64,6 +64,13 @@ Codex 官方客户端在 2026-10-13 加入后台（异步）压缩。pi-pleat v0
   `run_background_compaction` 调用与前台相同的 `run_remote_compact_v2_attempt`，后者在输入末尾追加
   [`CompactionTrigger`](https://github.com/openai/codex/blob/9e03960cf8807c37fc987bf17b4e745b8b3339d2/codex-rs/core/src/compact_remote_v2_attempt.rs#L172)。
 
+本次核对的 main 为 [`89461ea6833832b0551ce24ee32205824d5c108d`](https://github.com/openai/codex/commit/89461ea6833832b0551ce24ee32205824d5c108d)（2026-10-19），对应代码：
+
+- [启动、取回、等待与关闭后台任务](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/session/async_compaction.rs#L40)：按配置阈值捕获历史，前台继续；硬阈值时可等待已有任务。
+- [捕获历史前缀与发送 trigger](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/compact_remote_v2_attempt.rs#L235)：记录历史代数、前缀长度和认证所有者，用同一个 V2 请求处理快照。
+- [采用候选并检查剩余预算](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/compact_remote_v2_installation.rs#L17)：通过 Prefix 安装模式替换前缀，必要时追加一次前台压缩。
+- [前台生成后的采用边界](https://github.com/openai/codex/blob/89461ea6833832b0551ce24ee32205824d5c108d/codex-rs/core/src/session/turn.rs#L661)：在采样完成后的检查点获取就绪结果；后续保留消息继续进入新窗口。
+
 ## 研究报告
 
 - [Interleaved Thinking Unlocks Reliable MiniMax-M2 Agentic Capability](https://www.minimax.io/news/why-is-interleaved-thinking-important-for-m2)

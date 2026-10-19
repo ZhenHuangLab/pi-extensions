@@ -8,7 +8,7 @@ import { coverage, isClaudeThinking, toolRecords } from "../src/session.ts";
 import { appendTool, assistant, createHarness, testOptions, textReply, toolCall, usage } from "./harness.mjs";
 
 const model = { provider: "pleat-test", id: "deterministic", contextWindow: 20000 };
-const limits = limitsFor(model, { compaction: { reserveTokens: 1000 } });
+const limits = limitsFor(model, { compaction: { reserveTokens: 1000 }, "pi-pleat": { clearing: { localEnabled: true } } });
 function records(sizes) {
   const manager = SessionManager.inMemory();
   const saved = sizes.map((size, index) => appendTool(manager, { id: `call-${index}`, content: textReply(String(index).repeat(size)) }));
@@ -19,14 +19,14 @@ const plan = (manager, override = {}) => planClearing({ branch: manager.getBranc
 test("budgets resolve independent per-model overrides and clamp small windows", testOptions, () => {
   const key = `${model.provider}/${model.id}`;
   const settings = { compaction: { reserveTokens: 500, keepRecentTokens: 100, modelOverrides: { [key]: { keepRecentTokens: 200 } } } };
-  assert.deepEqual(limitsFor(model, settings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 9750, clearFloor: 1950, keepToolUses: 8, minClearBytes: 1024 });
+  assert.deepEqual(limitsFor(model, settings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 9750, clearFloor: 1950, keepToolUses: 8, minClearBytes: 1024, localClearingEnabled: false });
   const piSettings = SettingsManager.inMemory(settings).getCompactionSettings(model);
   assert.equal(piSettings.reserveTokens, limitsFor(model, settings).reserve);
   assert.equal(piSettings.keepRecentTokens, limitsFor(model, settings).keepRecent);
   assert.deepEqual(readCompactionSettings(settings, model), { enabled: true, reserve: 500, keepRecent: 200, problems: [] });
   assert.equal(limitsFor(model, {}).reserve, 16384);
   assert.equal(limitsFor(model, {}).keepRecent, 20000);
-  assert.deepEqual(limitsFor({ ...model, contextWindow: 100 }, { compaction: { enabled: false } }), { window: 100, reserve: 16384, keepRecent: 20000, enabled: false, threshold: 0, clearTrigger: 1, clearFloor: 1, keepToolUses: 8, minClearBytes: 1024 });
+  assert.deepEqual(limitsFor({ ...model, contextWindow: 100 }, { compaction: { enabled: false } }), { window: 100, reserve: 16384, keepRecent: 20000, enabled: false, threshold: 0, clearTrigger: 1, clearFloor: 1, keepToolUses: 8, minClearBytes: 1024, localClearingEnabled: false });
   for (const [field, resolvedField, ordinary, defaultValue] of [
     ["reserveTokens", "reserve", 500, 16384], ["keepRecentTokens", "keepRecent", 100, 20000],
   ]) {
@@ -72,11 +72,11 @@ test("budgets resolve independent per-model overrides and clamp small windows", 
   }
   assert.equal(limitsFor(model, { compaction: { reserveTokens: 0, keepRecentTokens: 0 } }).keepRecent, 0);
   assert.deepEqual(readClearingSettings({}, model), { clearing: DEFAULT_CLEARING, problems: [] });
-  const configured = { triggerRatio: 0.75, floorRatio: 0.25, keepToolUses: 3, minBytes: 2048 };
+  const configured = { triggerRatio: 0.75, floorRatio: 0.25, keepToolUses: 3, minBytes: 2048, localEnabled: false };
   const configuredSettings = { ...settings, "pi-pleat": { clearing: configured } };
   assert.deepEqual(readClearingSettings(configuredSettings, model), { clearing: configured, problems: [] });
-  assert.deepEqual(limitsFor(model, configuredSettings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 14625, clearFloor: 4875, keepToolUses: 3, minClearBytes: 2048 });
-  const boundary = { triggerRatio: 1, floorRatio: 0, keepToolUses: Number.MAX_SAFE_INTEGER, minBytes: 0 };
+  assert.deepEqual(limitsFor(model, configuredSettings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 14625, clearFloor: 4875, keepToolUses: 3, minClearBytes: 2048, localClearingEnabled: false });
+  const boundary = { triggerRatio: 1, floorRatio: 0, keepToolUses: Number.MAX_SAFE_INTEGER, minBytes: 0, localEnabled: false };
   assert.deepEqual(readClearingSettings({ "pi-pleat": { clearing: boundary } }, model), { clearing: boundary, problems: [] });
   assert.deepEqual(readClearingSettings({ "pi-pleat": { clearing: { minBytes: 0 } } }, model).clearing, { ...DEFAULT_CLEARING, minBytes: 0 });
   const path = `pi-pleat.clearing.modelOverrides["${key}"]`;
@@ -121,10 +121,10 @@ test("budgets resolve independent per-model overrides and clamp small windows", 
       });
     }
   }
-  const clearingOverride = { triggerRatio: 0.3, floorRatio: 0.05, keepToolUses: 4, minBytes: 512 };
+  const clearingOverride = { triggerRatio: 0.3, floorRatio: 0.05, keepToolUses: 4, minBytes: 512, localEnabled: false };
   const overrideSettings = { ...settings, "pi-pleat": { clearing: { ...configured, modelOverrides: { [key]: clearingOverride } } } };
   assert.deepEqual(readClearingSettings(overrideSettings, model), { clearing: clearingOverride, problems: [] });
-  assert.deepEqual(limitsFor(model, overrideSettings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 5850, clearFloor: 975, keepToolUses: 4, minClearBytes: 512 });
+  assert.deepEqual(limitsFor(model, overrideSettings), { window: 20000, reserve: 500, keepRecent: 200, enabled: true, threshold: 19500, clearTrigger: 5850, clearFloor: 975, keepToolUses: 4, minClearBytes: 512, localClearingEnabled: false });
   const slashedModel = { ...model, id: "group/deterministic" };
   const slashedSettings = { "pi-pleat": { clearing: { modelOverrides: { [key]: null, "pleat-test/group/deterministic": { keepToolUses: 2 } } } } };
   assert.deepEqual(readClearingSettings(slashedSettings, slashedModel), { clearing: { ...DEFAULT_CLEARING, keepToolUses: 2 }, problems: [] });
@@ -217,7 +217,7 @@ test("local clearing skips small, edited, omitted, and covered results and refus
   const minimum = records([1024, ...Array(8).fill(100)]);
   assert.equal(plan(minimum.manager, { limits: { ...limits, clearFloor: 100 } }).length, 1);
   const configured = records([700, 900, 5000]);
-  const configuredLimits = limitsFor(model, { compaction: { reserveTokens: 1000 }, "pi-pleat": { clearing: { floorRatio: 0, keepToolUses: 1, minBytes: 800 } } });
+  const configuredLimits = limitsFor(model, { compaction: { reserveTokens: 1000 }, "pi-pleat": { clearing: { localEnabled: true, floorRatio: 0, keepToolUses: 1, minBytes: 800 } } });
   assert.deepEqual(plan(configured.manager, { limits: configuredLimits }).map((draft) => draft.targetId), [configured.saved[1].entryId]);
   const utf8 = records(Array(9).fill(100));
   const target = utf8.saved[0].entryId;
@@ -246,6 +246,7 @@ test("local clearing skips targets followed by signed or redacted Claude thinkin
 test("turn_end commits branch-local edits, preserves earlier drafts, and recall returns originals", testOptions, async (t) => {
   const h = await createHarness(t, {
     tools: ["recall", "output"],
+    settings: { "pi-pleat": { clearing: { localEnabled: true } } },
     replies: [{ content: Array.from({ length: 12 }, (_, index) => toolCall(`integration-${index}`, "output")), usage: usage(10000, 20) }, textReply("done"), textReply("recalled")],
     before(pi) {
       pi.on("turn_end", (event) => event.message.stopReason === "toolUse" ? { entries: [...event.entries, { type: "custom", customType: "prior-extension", data: "kept" }] } : undefined);

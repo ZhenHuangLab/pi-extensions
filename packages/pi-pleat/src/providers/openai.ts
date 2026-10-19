@@ -4,11 +4,65 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Message, Model, Usage } from "@earendil-works/pi-ai";
 import { isRecord } from "../session.ts";
+import { isAnthropic } from "./anthropic.ts";
 import { captureResponse } from "./http.ts";
 
-export function isResponsesTrigger(model: Model<Api>): boolean {
-  return model.provider === "openai-codex" && model.api === "openai-codex-responses" ||
-    model.provider === "openai" && model.api === "openai-responses";
+export function readResponsesTriggerChannels(settings: Record<string, unknown> = {}): {
+  channels: { provider: string; api: string }[]; problems: string[];
+} {
+  const channels = [
+    { provider: "openai-codex", api: "openai-codex-responses" },
+    { provider: "openai", api: "openai-responses" },
+  ];
+  const problems: string[] = [];
+  const result = { channels, problems };
+  if (!Object.hasOwn(settings, "pi-pleat")) return result;
+  const config = settings["pi-pleat"];
+  if (!isRecord(config)) {
+    problems.push("Invalid pi-pleat: use an object. Using only built-in Responses trigger channels.");
+    return result;
+  }
+  if (!Object.hasOwn(config, "responsesTriggerChannels")) return result;
+  const entries = config.responsesTriggerChannels;
+  if (!Array.isArray(entries)) {
+    problems.push("Invalid pi-pleat.responsesTriggerChannels: use an array of { provider, api } objects. Using only built-in Responses trigger channels.");
+    return result;
+  }
+  let omitted = 0;
+  function problem(message: string): void {
+    if (problems.length < 5) problems.push(message);
+    else omitted++;
+  }
+  for (let index = 0; index < entries.length; index++) {
+    const entry: unknown = entries[index];
+    const path = `pi-pleat.responsesTriggerChannels[${index}]`;
+    if (!isRecord(entry)) {
+      problem(`Invalid ${path}: use an object with provider and api. Ignoring this entry.`);
+      continue;
+    }
+    if (Object.keys(entry).some((field) => field !== "provider" && field !== "api")) {
+      problem(`Invalid ${path}: unknown fields; use only provider and api. Ignoring this entry.`);
+      continue;
+    }
+    const provider = Object.hasOwn(entry, "provider") ? entry.provider : undefined;
+    const api = Object.hasOwn(entry, "api") ? entry.api : undefined;
+    if (typeof provider !== "string" || !provider.trim()) {
+      problem(`Invalid ${path}.provider: use a nonempty string. Ignoring this entry.`);
+      continue;
+    }
+    if (typeof api !== "string" || !api.trim()) {
+      problem(`Invalid ${path}.api: use a nonempty string. Ignoring this entry.`);
+      continue;
+    }
+    channels.push({ provider, api });
+  }
+  if (omitted) problems.push(`Invalid pi-pleat.responsesTriggerChannels: ${omitted} additional invalid entries ignored.`);
+  return result;
+}
+
+export function isResponsesTrigger(model: Model<Api>, settings: Record<string, unknown> = {}): boolean {
+  return !isAnthropic(model) && readResponsesTriggerChannels(settings).channels.some((channel) =>
+    channel.provider === model.provider && channel.api === model.api);
 }
 
 export type ResponsesOutcome =

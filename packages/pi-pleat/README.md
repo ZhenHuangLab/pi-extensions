@@ -16,9 +16,10 @@
 <p align="center"><b>English</b> · <a href="README.zh-CN.md">简体中文</a></p>
 
 pi-pleat keeps long Pi sessions inside the model's context window. Old tool results leave the
-context but stay in the session file, and the model gets them back with the `recall` tool. When the
+context but stay in the session file. The `recall` tool retrieves original tool results and text from
+user/assistant messages covered by compaction. When the
 context reaches the compaction threshold, pi-pleat uses native compaction on Anthropic and OpenAI
-Responses models and a text summary on other models. It never removes thinking itself. On Anthropic,
+Responses channels, including custom channels you enable, and a text summary on other channels. It never removes thinking itself. On Anthropic,
 the thinking in the turns kept after a native compaction stays usable; the live check confirmed this
 under strict prefix binding. The model sees one extra tool; nothing is added to the system prompt.
 
@@ -42,8 +43,9 @@ pi-pleat is developed and tested with Pi 1.2.0. It needs no settings.
 | Provider | Old tool results | Compaction |
 |---|---|---|
 | Anthropic (`anthropic`) | Cleared by Anthropic's server-side context editing; all thinking is kept | Native compaction with the session model; the signed compaction block replaces the summarized history |
-| OpenAI Codex (`openai-codex`) and OpenAI (`openai`, Responses API) | Replaced locally by a placeholder with a recall id | The Responses `compaction_trigger` item, as sent by the official Codex client; the encrypted compaction item and the user messages replace the summarized history |
-| Other providers | Replaced locally by a placeholder with a recall id | Pi's compaction, or a summary written by the fallback model |
+| OpenAI Codex (`openai-codex`) and OpenAI (`openai`, Responses API) | Kept by default; local clearing is optional | The Responses `compaction_trigger` item, as sent by the official Codex client; the encrypted compaction item and the user messages replace the summarized history |
+| Custom channels in `responsesTriggerChannels` | Kept by default; local clearing is optional | The same Responses `compaction_trigger` protocol, through the channel's registered adapter |
+| Other providers | Kept by default; local clearing is optional | Pi's compaction, or a summary written by the fallback model |
 
 On Anthropic, pi-pleat compacts at the end of a turn when the history before server-side clearing
 exceeds the threshold, because a compaction request cannot use clearing. It compacts exactly the
@@ -52,15 +54,17 @@ after the compaction block, so the thinking in that reply is still accepted. Bef
 request, including after a restart, it checks the summary, the kept reply, the system prompt and the
 tools; if one of them changed, the request carries the summary as text instead.
 
-On the OpenAI channels, compaction starts when Pi's own threshold is reached or you run `/compact`.
+On the OpenAI channels and configured Responses-trigger channels, compaction starts when Pi's own threshold is reached or you run `/compact`.
 pi-pleat sends the history before Pi's cut point with a `compaction_trigger` item, reads the whole
 response, and keeps the text user messages (up to 64,000 tokens) and the compaction item. It sends
 the encrypted item only to the same provider, API, endpoint and model, so it also writes a readable
 summary with the fallback model at the same time. A user message with an image, or `/compact` with
 instructions, uses a text summary instead.
 
-By default, local clearing starts when the context is larger than half of the compaction threshold. It replaces
-the oldest tool results of 1 KB or more with a note such as
+Anthropic uses server-side clearing. Other channels keep tool results until compaction by default.
+Set `pi-pleat.clearing.localEnabled: true` to enable local clearing. When enabled, it starts when the
+context is larger than half of the compaction threshold and replaces the oldest tool results of
+1 KB or more with a note such as
 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`, keeps the results of the last
 eight tool calls, and acts only when a batch frees at least a tenth of the threshold. Results that
 are followed by Claude thinking on the branch are left alone, because editing them would invalidate
@@ -79,15 +83,19 @@ margin of 4,096 tokens.
 The model sees this description:
 
 ```text
-Get the full output of an earlier tool call that was cleared to save context.
-Pass `id` from a cleared-output note, or `query` (command, path, tool name, or text) to get the newest match.
+Get original tool results or text from compacted user/assistant messages on this branch.
+Pass `id` (entry or tool call ID), or `query` (command, path, tool name, or text) for the newest match.
 ```
 
-`id` takes the recall id from a note or a tool call id. `query` searches the tool name, arguments and
-text output of earlier tool results on the current branch, returns the newest match, and lists the ids
-of up to five other matches. The result starts with a source line such as
+`id` takes a session entry id or a tool call id. `query` searches tool names, arguments, original
+outputs and the visible text of user/assistant messages covered by the latest compaction. It searches
+only the current branch, returns the newest match, and lists the ids of up to five other matches.
+Covered messages remain searchable after repeated compactions and a restart; current prompts and
+new replies are outside the chat search range. Chat results identify the original role and contain
+only visible text. Thinking, signatures, system instructions and encrypted state are excluded. The result starts with a source line such as
 `[c3d4e5f6 · bash "npm test" · 48.0KB]`, followed by the output exactly as the session saved it,
-including results that a compaction summarized. If Pi saved only part of the original output, the
+including results that a native compaction or text summary covered. Chat headers use `user` or
+`assistant` in place of the tool name. If Pi saved only part of the original output, the
 source line says so and reports whether the full output file still exists.
 
 Output over 2,000 lines or 50 KB is written to a temporary file, and the tool returns the start of it
@@ -98,7 +106,7 @@ passes the command or path of the kept tool call as `query`. Recall never re-run
 
 | Command | |
 |---|---|
-| `/context` | context usage and thresholds, clearing and compaction counts with their usage and cost (unknown or partial when a provider did not report usage), native replay state, provider capabilities, recall calls, thinking the provider reported as dropped, the fallback model, and recent notices |
+| `/context` | context usage and thresholds, the selected compaction method, clearing and compaction counts with their usage and cost (unknown or partial when a provider did not report usage), native replay state, provider capabilities, recall calls, thinking the provider reported as dropped, the fallback model, and recent notices |
 | `/context fallback` | show the fallback model |
 | `/context fallback <provider/model> [level]` | use this model, and optionally this thinking level (`off` to `max`), for this session |
 | `/context fallback default` | remove the session choice |
@@ -125,7 +133,11 @@ under `pi-pleat` in Pi's `settings.json`
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
     "fallbackThinking": "off",
+    "responsesTriggerChannels": [
+      { "provider": "cliproxyapi", "api": "cliproxyapi-codex-responses" }
+    ],
     "clearing": {
+      "localEnabled": false,
       "triggerRatio": 0.5,
       "floorRatio": 0.1,
       "keepToolUses": 8,
@@ -138,12 +150,26 @@ under `pi-pleat` in Pi's `settings.json`
 }
 ```
 
+`responsesTriggerChannels` defaults to an empty array and adds custom provider/API pairs to the built-in
+`openai-codex`/`openai-codex-responses` and `openai`/`openai-responses` channels. Copy the provider and API
+from the first line of `/context`. Matching is exact and case-sensitive; a pair applies to every model
+on that provider/API. Each entry must contain only nonempty `provider` and `api` strings. Invalid entries
+warn and are ignored individually; a non-array value ignores the custom list. Built-in channels remain
+enabled, and Anthropic keeps its own native compaction route.
+
+Add a pair when its adapter and endpoint support the Responses `compaction_trigger` protocol. Requests
+use the selected model's registered adapter, endpoint and credentials. Native replay still requires
+the same provider, API, endpoint and model. `/context` shows the selected compaction method and reports
+the summary route when the provider has returned an unsupported capability. This setting selects
+compaction; clearing uses its own settings and thresholds.
+
 Both override maps use exact `provider/modelId` keys, including case; model ids can contain slashes.
 Each clearing field resolves from the matching model override to `pi-pleat.clearing` to its default.
-All four fields are optional, including inside an override:
+All five fields are optional, including inside an override:
 
 | Field under `pi-pleat.clearing` | Default | Valid values | Purpose |
 |---|---|---|---|
+| `localEnabled` | `false` | Boolean | Enable local clearing on non-Anthropic channels; Anthropic uses server-side clearing |
 | `triggerRatio` | `0.5` | Finite number, `0 < x <= 1` | Start clearing above this fraction of T |
 | `floorRatio` | `0.1` | Finite number, `0 <= x < 1`, less than `triggerRatio` | Minimum tokens freed per batch, as a fraction of T |
 | `keepToolUses` | `8` | Safe integer, `x >= 1` | Keep the newest tool calls and their results |
@@ -164,7 +190,7 @@ Warnings appear once per session and stay in `/context`'s recent notices. Accord
 [Anthropic's context editing docs](https://platform.claude.com/docs/en/build-with-claude/context-editing),
 a lower floor clears more often and rewrites the prompt cache more often.
 
-The fallback model writes the text summaries and the readable summaries on the OpenAI channels.
+The fallback model writes the text summaries and the readable summaries on Responses-trigger channels.
 `fallbackThinking` defaults to `off` when a model is set. Without a fallback model, the session model
 writes these summaries at the session's thinking level, and Pi's own compaction runs when `/compact`
 or Pi's threshold finds no native compaction to use. Native compaction always uses the session model.
@@ -175,6 +201,9 @@ or Pi's threshold finds no native compaction to use. Native compaction always us
   compaction. Extensions that only rewrite tool results before they are first sent can be used with it.
 - Virtual models are not supported. While one is selected, pi-pleat only answers `recall`, and
   `/context` reports that no physical model is selected.
+- Native compaction and replay require a stable endpoint in the selected model's `baseUrl`. Providers
+  that change the endpoint during authentication are outside the supported scope: Pi 1.2's request
+  hook does not expose the effective endpoint after authentication.
 - Only Pi 1.2.0 has been tested.
 
 ## Verified scope
@@ -183,7 +212,8 @@ The local tests (164 passing) run Pi's session machinery and its Anthropic, Code
 against local mock servers. Live checks passed on 2026-10-14 for Anthropic `claude-haiku-5-5`, with
 four native compactions in one task, every later request under strict prefix binding, and a restart,
 and for OpenAI Codex `gpt-6-luna`, with two `compaction_trigger` compactions and a restart. The
-`openai` Responses channel is covered by the local mocks only. Real server-side clearing, recall by
+`openai` Responses channel is covered by the local mocks only. Custom Responses-trigger channels need
+separate provider verification. Real server-side clearing, recall by
 real models, summary quality, and the effect on cost and latency are not verified yet.
 
 [docs/validation.md](docs/validation.md) has the records, and [docs/architecture.md](docs/architecture.md)

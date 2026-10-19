@@ -13,7 +13,7 @@ export function planClearing({ branch, effectiveTokens, limits }: {
   effectiveTokens: number;
   limits: Limits;
 }): ContextEditEntryDraft[] {
-  if (effectiveTokens <= limits.clearTrigger) return [];
+  if (!limits.localClearingEnabled || effectiveTokens <= limits.clearTrigger) return [];
   const projection = buildSessionProjection(branch);
   const editedTargets = new Set(branch.flatMap((entry) => entry.type === "context_edit" ? [entry.targetId] : []));
   const callIds = projection.messages.flatMap((message) => message.role === "assistant"

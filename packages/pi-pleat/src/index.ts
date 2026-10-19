@@ -8,7 +8,7 @@ import type { CompactionDecision } from "./compact.ts";
 import { planClearing } from "./edits.ts";
 import { resolveSummarizer } from "./fallback.ts";
 import { isAnthropic, isClearingUnsupported, readAppliedEdits, withClearing } from "./providers/anthropic.ts";
-import { isResponsesTrigger } from "./providers/openai.ts";
+import { isResponsesTrigger, readResponsesTriggerChannels } from "./providers/openai.ts";
 import { recallTool } from "./recall.ts";
 import { applyReplay, createRequests } from "./requests.ts";
 import type { ReplayState } from "./requests.ts";
@@ -42,8 +42,12 @@ export default function piPleat(pi: ExtensionAPI): void {
     reported.add(message);
     ctx.ui.notify(message, "warning");
   }
-  function currentLimits(ctx: ExtensionContext, model: Model<Api>): Limits {
+  function currentSettings(ctx: ExtensionContext): Record<string, unknown> {
     const settings = { ...pi.getSettings() };
+    for (const problem of readResponsesTriggerChannels(settings).problems) notify(ctx, problem);
+    return settings;
+  }
+  function currentLimits(ctx: ExtensionContext, model: Model<Api>, settings = currentSettings(ctx)): Limits {
     for (const problem of readCompactionSettings(settings, model).problems) notify(ctx, problem);
     for (const problem of readClearingSettings(settings, model).problems) notify(ctx, problem);
     return limitsFor(model, settings);
@@ -75,8 +79,9 @@ export default function piPleat(pi: ExtensionAPI): void {
     handler: (args, ctx) => contextCommand(args, pi, ctx, () => {
       const model = isPhysicalModel(ctx.model) ? ctx.model : undefined;
       const branch = ctx.sessionManager.getBranch();
+      const settings = currentSettings(ctx);
       const currentReplay = model && replay?.entryId === getLatestCompactionEntry(branch)?.id && replay?.channel === channelKey(channelOf(model)) ? replay.result : undefined;
-      return formatContextStatus({ model, limits: model ? currentLimits(ctx, model) : undefined,
+      return formatContextStatus({ model, limits: model ? currentLimits(ctx, model, settings) : undefined, settings,
         usage: ctx.getContextUsage(), raw: rawNextTokens(ctx, responses), branch, stats,
         summarizer: resolveSummarizer(pi, ctx), replay: currentReplay, diagnostics });
     }),
@@ -89,20 +94,21 @@ export default function piPleat(pi: ExtensionAPI): void {
       const model = ctx.model;
       const payload = event.payload;
       if (!isPhysicalModel(model) || !isRecord(payload) || payload.model !== model.id) return;
+      const settings = currentSettings(ctx);
       const warm = isAnthropic(model) && payload.max_tokens === 1;
       const branch = ctx.sessionManager.getBranch();
       const key = channelKey(channelOf(model));
       let result = payload;
-      if (Array.isArray(payload.messages) && isAnthropic(model) || Array.isArray(payload.input) && isResponsesTrigger(model)) {
-        const applied = applyReplay(payload, model, branch);
+      if (Array.isArray(payload.messages) && isAnthropic(model) || Array.isArray(payload.input) && isResponsesTrigger(model, settings)) {
+        const applied = applyReplay(payload, model, branch, settings);
         result = applied.payload;
         if (!warm) replay = { entryId: getLatestCompactionEntry(branch)?.id, channel: key, result: applied };
         if (applied.state === "rejected") diagnostic(`Native replay rejected: ${applied.reason}.`);
-      }
+      } else if (!warm) replay = undefined;
       if (isAnthropic(model) && Array.isArray(result.messages) && !("compaction" in result) &&
           readCapabilities(branch).get(`${key}#clearing`)?.status !== "unsupported") {
         if ("context_management" in result) diagnostic("Existing context_management configuration kept.");
-        result = withClearing(result, currentLimits(ctx, model));
+        result = withClearing(result, currentLimits(ctx, model, settings));
         if (!warm) clearingRequestKey = key;
       } else if (!warm) clearingRequestKey = undefined;
       requests.record(result, channelOf(model));

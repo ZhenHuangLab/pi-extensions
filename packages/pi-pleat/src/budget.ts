@@ -8,9 +8,10 @@ export interface ClearingSettings {
   floorRatio: number;
   keepToolUses: number;
   minBytes: number;
+  localEnabled: boolean;
 }
 export const DEFAULT_CLEARING: Readonly<ClearingSettings> = Object.freeze({
-  triggerRatio: 0.5, floorRatio: 0.1, keepToolUses: 8, minBytes: 1024,
+  triggerRatio: 0.5, floorRatio: 0.1, keepToolUses: 8, minBytes: 1024, localEnabled: false,
 });
 export const CONTEXT_SAFETY_TOKENS = 4096;
 
@@ -50,7 +51,7 @@ export function readCompactionSettings(settings: Record<string, unknown>, model:
     keepRecent: tokens("keepRecentTokens", 20000), problems };
 }
 
-const clearingFields: [keyof ClearingSettings, (value: number) => boolean, string][] = [
+const clearingFields: [Exclude<keyof ClearingSettings, "localEnabled">, (value: number) => boolean, string][] = [
   ["triggerRatio", (value) => value > 0 && value <= 1, "use a finite number greater than 0 and at most 1"],
   ["floorRatio", (value) => value >= 0 && value < 1, "use a finite number at least 0 and less than 1"],
   ["keepToolUses", (value) => Number.isSafeInteger(value) && value >= 1, "use a safe integer at least 1"],
@@ -62,7 +63,7 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
 } {
   const clearing = { ...DEFAULT_CLEARING };
   const sources: Record<keyof ClearingSettings, "default" | "settings"> = {
-    triggerRatio: "default", floorRatio: "default", keepToolUses: "default", minBytes: "default",
+    triggerRatio: "default", floorRatio: "default", keepToolUses: "default", minBytes: "default", localEnabled: "default",
   };
   const problems: string[] = [];
   const result = { clearing, problems };
@@ -80,6 +81,12 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
   }
   for (const key of Object.keys(values)) {
     if (key !== "modelOverrides" && !Object.hasOwn(DEFAULT_CLEARING, key)) problems.push(`Unknown setting pi-pleat.clearing.${key} ignored.`);
+  }
+  if (Object.hasOwn(values, "localEnabled")) {
+    if (typeof values.localEnabled === "boolean") {
+      clearing.localEnabled = values.localEnabled;
+      sources.localEnabled = "settings";
+    } else problems.push("Invalid pi-pleat.clearing.localEnabled: use a boolean. Using the default false.");
   }
   for (const [key, valid, rule] of clearingFields) {
     if (!Object.hasOwn(values, key)) continue;
@@ -113,6 +120,13 @@ export function readClearingSettings(settings: Record<string, unknown>, model: P
     if (!Object.hasOwn(DEFAULT_CLEARING, field)) problems.push(`Unknown setting ${path}.${field} ignored.`);
   }
   const ordinary = { ...clearing };
+  if (Object.hasOwn(entry, "localEnabled")) {
+    if (typeof entry.localEnabled === "boolean") clearing.localEnabled = entry.localEnabled;
+    else {
+      const label = sources.localEnabled === "settings" ? "the pi-pleat.clearing value" : "the default";
+      problems.push(`Invalid ${path}.localEnabled: use a boolean. Using ${label} ${ordinary.localEnabled}.`);
+    }
+  }
   for (const [field, valid, rule] of clearingFields) {
     if (!Object.hasOwn(entry, field)) continue;
     const value = entry[field];
@@ -141,6 +155,7 @@ export interface Limits {
   clearFloor: number;
   keepToolUses: number;
   minClearBytes: number;
+  localClearingEnabled: boolean;
 }
 
 export function limitsFor(model: Model<Api>, settings: Record<string, unknown>): Limits {
@@ -152,7 +167,7 @@ export function limitsFor(model: Model<Api>, settings: Record<string, unknown>):
     enabled: compaction.enabled, threshold,
     clearTrigger: Math.max(1, Math.round(clearing.triggerRatio * threshold)),
     clearFloor: Math.max(1, Math.round(clearing.floorRatio * threshold)),
-    keepToolUses: clearing.keepToolUses, minClearBytes: clearing.minBytes,
+    keepToolUses: clearing.keepToolUses, minClearBytes: clearing.minBytes, localClearingEnabled: clearing.localEnabled,
   };
 }
 

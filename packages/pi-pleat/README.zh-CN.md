@@ -15,7 +15,7 @@
 
 <p align="center"><a href="README.md">English</a> · <b>简体中文</b></p>
 
-pi-pleat 让很长的 Pi 会话保持在模型的上下文窗口之内。旧的工具结果离开上下文，但仍保存在会话文件中，模型可以用 `recall` 工具取回。上下文达到压缩阈值时，pi-pleat 在 Anthropic 和 OpenAI Responses 模型上使用原生压缩（compaction），在其他模型上使用文本摘要。它自己从不删除 thinking。在 Anthropic 上，原生压缩之后保留轮次中的 thinking 仍然可用，真实检查在严格前缀绑定下确认了这一点。模型只多看到一个工具，系统提示不增加任何内容。
+pi-pleat 让很长的 Pi 会话保持在模型的上下文窗口之内。旧的工具结果离开上下文，但仍保存在会话文件中。模型可以用 `recall` 取回原始工具输出，以及压缩覆盖的用户和 assistant 对话正文。上下文达到压缩阈值时，pi-pleat 在 Anthropic、OpenAI Responses 和显式配置的自定义 Responses 通道上使用原生压缩（compaction），在其他通道上使用文本摘要。它自己从不删除 thinking。在 Anthropic 上，原生压缩之后保留轮次中的 thinking 仍然可用，真实检查在严格前缀绑定下确认了这一点。模型只多看到一个工具，系统提示不增加任何内容。
 
 ## 安装
 
@@ -37,14 +37,15 @@ pi-pleat 基于 Pi 1.2.0 开发和测试，不需要任何设置。
 | 服务商 | 旧的工具结果 | 压缩 |
 |---|---|---|
 | Anthropic（`anthropic`） | 由 Anthropic 服务端的上下文编辑清理，全部 thinking 保留 | 用会话模型做原生压缩；带签名的压缩块替换被摘要的历史 |
-| OpenAI Codex（`openai-codex`）和 OpenAI（`openai`，Responses API） | 在本地换成带召回 ID 的占位文字 | 与官方 Codex 客户端相同，发送 Responses `compaction_trigger` 项；加密的压缩项和用户消息替换被摘要的历史 |
-| 其他服务商 | 在本地换成带召回 ID 的占位文字 | Pi 的压缩，或由回退模型写的摘要 |
+| OpenAI Codex（`openai-codex`）和 OpenAI（`openai`，Responses API） | 默认保留；可选启用本地清理 | 与官方 Codex 客户端相同，发送 Responses `compaction_trigger` 项；加密的压缩项和用户消息替换被摘要的历史 |
+| `responsesTriggerChannels` 中的自定义通道 | 默认保留；可选启用本地清理 | 通过该通道注册的适配器使用相同的 Responses `compaction_trigger` 协议 |
+| 其他服务商 | 默认保留；可选启用本地清理 | Pi 的压缩，或由回退模型写的摘要 |
 
 在 Anthropic 上，压缩请求不能同时使用清理，所以 pi-pleat 在一轮结束时检查服务端清理之前的历史大小，超过阈值就压缩。它只压缩最近一次实际发送的请求，这个请求的回复成为第一条保留消息，紧跟在压缩块之后，因此回复中的 thinking 仍被接受。之后的每个请求（包括重启之后）都会先核对摘要、保留的回复、系统提示和工具；其中任何一项变化时，请求改为以文字形式携带摘要。
 
-在 OpenAI 的两个通道上，压缩在 Pi 自己的阈值到达或运行 `/compact` 时开始。pi-pleat 把 Pi 切点之前的历史加上一个 `compaction_trigger` 项发出去，读取完整响应，保留纯文本的用户消息（最多 64,000 tokens）和压缩项。加密的压缩项只发给相同的服务商、API、端点和模型，所以 pi-pleat 同时用回退模型写一份可读摘要。用户消息含图片，或 `/compact` 带有说明时，改用文本摘要。
+在 OpenAI 的两个通道和配置的自定义 Responses-trigger 通道上，压缩在 Pi 自己的阈值到达或运行 `/compact` 时开始。pi-pleat 把 Pi 切点之前的历史加上一个 `compaction_trigger` 项发出去，读取完整响应，保留纯文本的用户消息（最多 64,000 tokens）和压缩项。加密的压缩项只发给相同的服务商、API、端点和模型，所以 pi-pleat 同时用回退模型写一份可读摘要。用户消息含图片，或 `/compact` 带有说明时，改用文本摘要。
 
-默认情况下，上下文超过压缩阈值的一半时，本地清理开始。它把最旧的、不小于 1 KB 的工具结果换成占位文字，例如 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`；最近 8 次工具调用的结果保持不变；一批释放的空间达不到阈值的十分之一时不清理。分支上后面跟着 Claude thinking 的结果也不动，因为修改它们会使那些 thinking 失效。Anthropic 的服务端清理使用相同的触发点、相同的 8 次调用和相同的最小批量。
+Anthropic 使用服务端清理，其他通道默认保留工具结果直到压缩。设置 `pi-pleat.clearing.localEnabled: true` 后启用本地清理，上下文超过压缩阈值的一半时开始。它把最旧的、不小于 1 KB 的工具结果换成占位文字，例如 `[Output cleared to save context (48.0KB). recall id="c3d4e5f6"]`；最近 8 次工具调用的结果保持不变；一批释放的空间达不到阈值的十分之一时不清理。分支上后面跟着 Claude thinking 的结果也不动，因为修改它们会使那些 thinking 失效。Anthropic 的服务端清理使用相同的触发点、相同的 8 次调用和相同的最小批量。
 
 原生压缩不可用、无法证明安全，或重试后仍然失败时，pi-pleat 写一份 Pi 格式的文本摘要，或者交给 Pi 照常压缩，并显示原因。文本摘要可能使保留的 Claude thinking 失效。遇到认证错误或不完整的响应时，跳过本次压缩，历史保持不变。压缩后的下一请求加上 4,096 tokens 的余量放不下模型窗口时，pi-pleat 也丢弃该结果并保留历史。
 
@@ -53,11 +54,11 @@ pi-pleat 基于 Pi 1.2.0 开发和测试，不需要任何设置。
 模型看到的工具说明是：
 
 ```text
-Get the full output of an earlier tool call that was cleared to save context.
-Pass `id` from a cleared-output note, or `query` (command, path, tool name, or text) to get the newest match.
+Get original tool results or text from compacted user/assistant messages on this branch.
+Pass `id` (entry or tool call ID), or `query` (command, path, tool name, or text) for the newest match.
 ```
 
-`id` 接受占位文字中的召回 ID 或工具调用 ID。`query` 在当前分支以前的工具结果中搜索工具名、参数和文字输出，返回最新的一条匹配，并列出最多 5 个其他匹配的 ID。结果第一行说明来源，例如 `[c3d4e5f6 · bash "npm test" · 48.0KB]`，后面是会话保存的原样输出，包括已被压缩摘要覆盖的结果。如果 Pi 只保存了原始输出的一部分，来源说明会写明，并报告完整输出文件是否还在。
+`id` 接受会话条目 ID 或工具调用 ID。`query` 在当前分支搜索工具名、参数、原始输出，以及最近一次压缩覆盖的用户和 assistant 正文，返回最新的一条匹配，并列出最多 5 个其他匹配的 ID。连续压缩和重启后，已覆盖的正文仍可检索；当前提示和新回复位于对话检索范围之外。对话结果标明原始角色，只返回可见正文，不包含 thinking、签名、系统指令或加密状态。结果第一行说明来源，例如 `[c3d4e5f6 · bash "npm test" · 48.0KB]`，后面是会话保存的原样输出，包括已被原生压缩或文本摘要覆盖的结果。对话原文的来源说明使用 `user` 或 `assistant` 代替工具名。如果 Pi 只保存了原始输出的一部分，来源说明会写明，并报告完整输出文件是否还在。
 
 超过 2,000 行或 50 KB 的输出会写入临时文件，工具返回开头部分和文件路径，模型再用 `read` 分段读取。在 Anthropic 上，服务端的占位文字里没有召回 ID，模型用保留的工具调用中的命令或路径作为 `query`。召回从不重新运行命令。
 
@@ -65,7 +66,7 @@ Pass `id` from a cleared-output note, or `query` (command, path, tool name, or t
 
 | 命令 | |
 |---|---|
-| `/context` | 上下文用量和阈值、清理和压缩的次数及其用量和费用（服务商没有报告用量时显示 unknown 或 partial）、原生回放状态、服务商能力、召回次数、服务商报告丢弃的 thinking、回退模型和最近的提示 |
+| `/context` | 上下文用量和阈值、当前选择的压缩方式、清理和压缩的次数及其用量和费用（服务商没有报告用量时显示 unknown 或 partial）、原生回放状态、服务商能力、召回次数、服务商报告丢弃的 thinking、回退模型和最近的提示 |
 | `/context fallback` | 显示回退模型 |
 | `/context fallback <provider/model> [level]` | 本会话使用这个模型，可以同时指定 thinking 级别（`off` 到 `max`） |
 | `/context fallback default` | 取消本会话的选择 |
@@ -86,7 +87,11 @@ pi-pleat 读取 Pi 的 `compaction` 设置。`reserveTokens` 和 `keepRecentToke
   "pi-pleat": {
     "fallbackModel": "anthropic/claude-haiku-5-5",
     "fallbackThinking": "off",
+    "responsesTriggerChannels": [
+      { "provider": "cliproxyapi", "api": "cliproxyapi-codex-responses" }
+    ],
     "clearing": {
+      "localEnabled": false,
       "triggerRatio": 0.5,
       "floorRatio": 0.1,
       "keepToolUses": 8,
@@ -99,10 +104,15 @@ pi-pleat 读取 Pi 的 `compaction` 设置。`reserveTokens` 和 `keepRecentToke
 }
 ```
 
-两处覆盖都使用精确区分大小写的 `provider/modelId` 键，模型 ID 可以包含斜线。清理的每项依次取匹配的模型覆盖、`pi-pleat.clearing` 的同名值和默认值。下面四项均可省略，模型覆盖中也一样：
+`responsesTriggerChannels` 默认是空数组，在内置的 `openai-codex`/`openai-codex-responses` 和 `openai`/`openai-responses` 之外添加自定义 provider/API 配对。可以从 `/context` 第一行复制 provider 和 API。匹配精确区分大小写，一个配对适用于该 provider/API 下的所有模型。每项只允许非空的 `provider` 和 `api` 字符串。无效项会警告并单独忽略；值不是数组时忽略自定义列表。内置通道继续启用，Anthropic 使用自己的原生压缩路径。
+
+为适配器和端点支持 Responses `compaction_trigger` 协议的通道添加配对。请求使用所选模型已注册的适配器、端点和凭据；原生回放仍要求 provider、API、端点和模型全部相同。`/context` 显示当前选择的压缩方式，服务商已返回不支持的能力记录时显示摘要路径。这个设置选择压缩方式；clearing 使用自己的设置和阈值。
+
+两处覆盖都使用精确区分大小写的 `provider/modelId` 键，模型 ID 可以包含斜线。清理的每项依次取匹配的模型覆盖、`pi-pleat.clearing` 的同名值和默认值。下面五项均可省略，模型覆盖中也一样：
 
 | `pi-pleat.clearing` 下的字段 | 默认值 | 有效范围 | 用途 |
 |---|---|---|---|
+| `localEnabled` | `false` | 布尔值 | 启用非 Anthropic 通道的本地清理；Anthropic 使用服务端清理 |
 | `triggerRatio` | `0.5` | 有限数，`0 < x <= 1` | 上下文超过 T 的这个比例时开始清理 |
 | `floorRatio` | `0.1` | 有限数，`0 <= x < 1`，且小于 `triggerRatio` | 一批至少释放 T 的这个比例 |
 | `keepToolUses` | `8` | 安全整数，`x >= 1` | 保留最近这些工具调用及其结果 |
@@ -112,17 +122,18 @@ pi-pleat 读取 Pi 的 `compaction` 设置。`reserveTokens` 和 `keepRecentToke
 
 普通清理设置的无效值会警告并使用默认值；普通设置的 `floorRatio >= triggerRatio` 时，两个比例都恢复默认值，只显示一条警告。模型覆盖的无效字段会警告并保留解析后的普通值或默认值，警告会说明使用的值。覆盖后的 `floorRatio >= triggerRatio` 时，两个比例都恢复为解析后的普通比例，只显示一条警告；其他覆盖字段仍然生效。`pi-pleat` 或 `pi-pleat.clearing` 不是对象时，警告并使用全部清理默认值。清理的 `modelOverrides` 或匹配条目不是对象时，警告并忽略相应覆盖。普通清理设置或匹配条目中的未知键会警告并忽略；不匹配的条目不校验。警告在每个会话中只显示一次，并保留在 `/context` 的最近提示中。按 [Anthropic 的上下文编辑文档](https://platform.claude.com/docs/en/build-with-claude/context-editing)，释放下限越低，清理和提示缓存重写越频繁。
 
-回退模型负责写文本摘要，以及 OpenAI 通道上的可读摘要。设置了模型时，`fallbackThinking` 默认是 `off`。没有设置回退模型时，这些摘要由会话模型按会话的 thinking 级别来写；`/compact` 或 Pi 的阈值找不到可用的原生压缩时，由 Pi 自己压缩。原生压缩始终使用会话模型。
+回退模型负责写文本摘要，以及 Responses-trigger 通道上的可读摘要。设置了模型时，`fallbackThinking` 默认是 `off`。没有设置回退模型时，这些摘要由会话模型按会话的 thinking 级别来写；`/compact` 或 Pi 的阈值找不到可用的原生压缩时，由 Pi 自己压缩。原生压缩始终使用会话模型。
 
 ## 兼容性
 
 - 不要和其他修改对话历史或接管压缩的扩展一起使用。只在工具结果首次发送前改写它的扩展可以一起使用。
 - 不支持虚拟模型。选中虚拟模型时，pi-pleat 只响应 `recall`，`/context` 会说明当前没有选中物理模型。
+- 原生压缩和回放要求所选模型的 `baseUrl` 为稳定端点。认证过程改变端点的通道不在支持范围内：Pi 1.2 的请求事件未提供认证解析后的有效端点。
 - 只在 Pi 1.2.0 上测试过。
 
 ## 验证范围
 
-本地测试（164 项通过）在本地模拟服务上运行 Pi 的会话机制，以及它的 Anthropic、Codex 和 OpenAI 适配器。2026-10-14 的真实接口检查通过：Anthropic `claude-haiku-5-5` 在一个任务中完成 4 次原生压缩，之后的每个请求都在严格前缀绑定下成功，重启也通过；OpenAI Codex `gpt-6-luna` 完成 2 次 `compaction_trigger` 压缩，重启也通过。`openai` 的 Responses 通道只有本地模拟测试。真实的服务端清理、真实模型的召回行为、摘要质量，以及对费用和延迟的影响都还没有验证。
+本地测试（164 项通过）在本地模拟服务上运行 Pi 的会话机制，以及它的 Anthropic、Codex 和 OpenAI 适配器。2026-10-14 的真实接口检查通过：Anthropic `claude-haiku-5-5` 在一个任务中完成 4 次原生压缩，之后的每个请求都在严格前缀绑定下成功，重启也通过；OpenAI Codex `gpt-6-luna` 完成 2 次 `compaction_trigger` 压缩，重启也通过。`openai` 的 Responses 通道只有本地模拟测试。自定义 Responses-trigger 通道需要单独验证服务商的协议支持。真实的服务端清理、真实模型的召回行为、摘要质量，以及对费用和延迟的影响都还没有验证。
 
 记录见 [docs/validation.md](docs/validation.md)，设计见 [docs/architecture.md](docs/architecture.md)。
 
